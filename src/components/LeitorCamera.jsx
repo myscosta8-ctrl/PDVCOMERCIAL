@@ -4,6 +4,29 @@ import { Botao, Icone, TelaSuspensa } from './ui.jsx'
 
 // Detector de código de barras ITF (padrão dos boletos). Usa o leitor nativo do
 // navegador quando existe; senão, o leitor embutido (carregado só na primeira vez).
+let detectorPronto = null
+const obterDetector = () => (detectorPronto ??= criarDetector().catch((e) => { detectorPronto = null; throw e }))
+
+// Lê o código de uma foto (em pé ou deitada). Retorna o resultado de lerBoleto ou null.
+async function lerFoto(arquivo) {
+  const detectar = await obterDetector()
+  const img = await createImageBitmap(arquivo)
+  const escala = Math.min(1, 2400 / Math.max(img.width, img.height))
+  const w = Math.round(img.width * escala), h = Math.round(img.height * escala)
+  for (const giro of [0, 90, 270]) {
+    const c = document.createElement('canvas')
+    const deitada = giro !== 0
+    c.width = deitada ? h : w; c.height = deitada ? w : h
+    const ctx = c.getContext('2d', { willReadFrequently: true })
+    ctx.translate(c.width / 2, c.height / 2); ctx.rotate((giro * Math.PI) / 180); ctx.drawImage(img, -w / 2, -h / 2, w, h)
+    for (const t of await detectar(c, ctx.getImageData(0, 0, c.width, c.height))) {
+      const b = lerBoleto(t)
+      if (b?.valido && String(t).replace(/\D/g, '').length === 44) return b
+    }
+  }
+  return null
+}
+
 async function criarDetector() {
   try {
     if ('BarcodeDetector' in window && (await window.BarcodeDetector.getSupportedFormats()).includes('itf')) {
@@ -44,7 +67,7 @@ export function LeitorBoleto({ aberta, onFechar, onLido }) {
       await v.play()
       const trilha = fluxo.getVideoTracks()[0]
       if (trilha?.getCapabilities?.().torch) setLanterna({ trilha, ligada: false })
-      const detectar = await criarDetector()
+      const detectar = await obterDetector()
       if (parar) return
       setEstado('lendo')
       const ciclo = async () => {
@@ -81,6 +104,20 @@ export function LeitorBoleto({ aberta, onFechar, onLido }) {
     return () => { parar = true; clearTimeout(timer); fluxo?.getTracks().forEach((t) => t.stop()) }
   }, [aberta])
 
+  const [lendoFoto, setLendoFoto] = useState(false)
+  const foto = useRef(null)
+  const escolherFoto = async (e) => {
+    const arquivo = e.target.files?.[0]
+    e.target.value = ''
+    if (!arquivo) return
+    setLendoFoto(true); setErro('')
+    try {
+      const b = await lerFoto(arquivo)
+      if (b) { lido.current(b); return }
+      setErro('Não foi possível ler o código nesta foto. Tire outra mais de perto, com o código de barras inteiro e nítido.')
+    } catch { setErro('Não foi possível abrir a foto.') } finally { setLendoFoto(false) }
+  }
+
   const alternarLanterna = async () => {
     try {
       await lanterna.trilha.applyConstraints({ advanced: [{ torch: !lanterna.ligada }] })
@@ -91,11 +128,13 @@ export function LeitorBoleto({ aberta, onFechar, onLido }) {
   return (
     <TelaSuspensa aberta={aberta} titulo="Ler boleto pela câmera" subtitulo="Enquadre o código de barras na faixa, com o boleto deitado e bem iluminado" onFechar={onFechar} largura="max-w-2xl"
       rodape={<>
+        <input ref={foto} type="file" accept="image/*" className="hidden" onChange={escolherFoto} />
+        <Botao variante="secundario" className="mr-auto" carregando={lendoFoto} onClick={() => foto.current?.click()}>Usar uma foto</Botao>
         {lanterna && <Botao variante="secundario" onClick={alternarLanterna}>{lanterna.ligada ? 'Desligar lanterna' : 'Ligar lanterna'}</Botao>}
         <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
       </>}>
       {estado === 'erro' ? (
-        <p className="flex items-start gap-2 rounded-lg bg-rubro-50 p-3 text-rubro-600 dark:bg-rubro-600/20 dark:text-rubro-300"><Icone nome="alerta" className="mt-0.5 h-5 w-5 shrink-0" />{erro}</p>
+        <p className="flex items-start gap-2 rounded-lg bg-rubro-50 p-3 text-rubro-600 dark:bg-rubro-600/20 dark:text-rubro-300"><Icone nome="alerta" className="mt-0.5 h-5 w-5 shrink-0" />{erro} Você também pode usar uma foto do boleto.</p>
       ) : (
         <div className="relative overflow-hidden rounded-lg bg-black">
           <video ref={video} className="block aspect-video w-full object-cover" playsInline muted />
@@ -104,6 +143,7 @@ export function LeitorBoleto({ aberta, onFechar, onLido }) {
           <p className="absolute inset-x-0 bottom-2 text-center text-sm text-white">{estado === 'iniciando' ? 'Abrindo a câmera…' : 'Procurando o código de barras…'}</p>
         </div>
       )}
+      {erro && estado !== 'erro' && <p className="mt-3 text-sm text-rubro-600 dark:text-rubro-300">{erro}</p>}
       <p className="mt-3 text-sm text-tinta-400">Os dígitos são conferidos antes de preencher. Se a câmera não focar, aproxime e afaste devagar ou digite a linha.</p>
     </TelaSuspensa>
   )

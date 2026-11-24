@@ -60,16 +60,26 @@ const L = (id, tipo, descricao, valor, venc, extra = {}) => ({
   id, tipo, descricao, valor, valor_pago: 0, vencimento: dIso(venc), competencia: dIso(Math.min(venc, 0)), parcela: 1, parcelas: 1, status: 'aberto',
   documento: null, linha_digitavel: null, observacao: null, centro_custo_id: 'cc1', centro: { nome: 'Loja' }, fornecedor: null, cliente: null, baixas: [], ...extra,
 })
+const F = (id, descricao, codigo, valor, dia, extra = {}) => ({ id, descricao, ...pc(codigo), valor, dia_vencimento: dia, valor_variavel: false, inicio: '2026-01-01', fim: null, ativo: true,
+  observacao: null, centro_custo_id: 'cc1', centro: { nome: 'Loja' }, fornecedor_id: null, fornecedor: null, ...extra })
+const FIXAS = [
+  F('df1', 'Aluguel da loja', '4.01', 2200, 24), F('df2', 'Energia elétrica', '4.02', 480, 21, { valor_variavel: true }),
+  F('df3', 'Internet e telefone', '4.02', 189.9, 12), F('df4', 'Contabilidade', '4.05', 650, 6), F('df5', 'Salários', '4.03', 4380, 7),
+  F('df6', 'Água e esgoto', '4.02', 95, 27, { valor_variavel: true }), F('df7', 'Sistema de gestão', '4.06', 149.9, 14),
+  F('df8', 'Seguro do ponto comercial', '4.11', 120, 15, { fim: '2026-06-01' }),
+]
 const LANCAMENTOS = [
-  L('la1', 'pagar', 'Energia elétrica', 486.32, -3, { ...pc('4.02'), documento: 'Fatura 10/2026' }),
-  L('la2', 'pagar', 'Aluguel da loja', 2200, 0, { ...pc('4.01'), valor_pago: 1000, baixas: [{ id: 'b1', data: dIso(-2), valor: 1000, juros: 0, desconto: 0, forma: 'pix', conta_bancaria_id: 'cb2' }] }),
+  L('la1', 'pagar', 'Energia elétrica', 486.32, -3, { ...pc('4.02'), documento: 'Fatura 10/2026', despesa_fixa_id: 'df2' }),
+  L('la12', 'pagar', 'Energia elétrica', 486.32, -1, { ...pc('4.02'), criado_em: dIso(-2) }),
+  L('la13', 'pagar', 'Água e esgoto', 95, 3, { ...pc('4.02'), despesa_fixa_id: 'df6', observacao: 'Valor estimado: confira a fatura e ajuste.' }),
+  L('la2', 'pagar', 'Aluguel da loja', 2200, 0, { ...pc('4.01'), despesa_fixa_id: 'df1', valor_pago: 1000, baixas: [{ id: 'b1', data: dIso(-2), valor: 1000, juros: 0, desconto: 0, forma: 'pix', conta_bancaria_id: 'cb2' }] }),
   L('la3', 'pagar', 'NF-e 88412 duplicata 001', 921.3, 4, { ...pc('3.01'), ...NF, documento: '88412/001', parcela: 1, parcelas: 2 }),
   L('la4', 'pagar', 'Simples Nacional (DAS)', 1312.4, 6, { ...pc('2.01'), linha_digitavel: '85890000013124003282612410202611000000000004' }),
-  L('la5', 'pagar', 'Contabilidade', 650, 12, { ...pc('4.05') }),
-  L('la6', 'pagar', 'Salários', 4380, 13, { ...pc('4.03') }),
-  L('la7', 'pagar', 'Internet e telefone', 189.9, 18, { ...pc('4.02') }),
+  L('la5', 'pagar', 'Contabilidade', 650, 12, { ...pc('4.05'), despesa_fixa_id: 'df4' }),
+  L('la6', 'pagar', 'Salários', 4380, 13, { ...pc('4.03'), despesa_fixa_id: 'df5' }),
+  L('la7', 'pagar', 'Internet e telefone', 189.9, 18, { ...pc('4.02'), despesa_fixa_id: 'df3' }),
   L('la8', 'pagar', 'NF-e 88412 duplicata 002', 921.3, 34, { ...pc('3.01'), ...NF, documento: '88412/002', parcela: 2, parcelas: 2 }),
-  L('la9', 'pagar', 'Sistema de gestão', 149.9, -10, { ...pc('4.06'), status: 'pago', valor_pago: 149.9, baixas: [{ id: 'b2', data: dIso(-10), valor: 149.9, juros: 0, desconto: 0, forma: 'cartao', conta_bancaria_id: 'cb2' }] }),
+  L('la9', 'pagar', 'Sistema de gestão', 149.9, -10, { ...pc('4.06'), despesa_fixa_id: 'df7', status: 'pago', valor_pago: 149.9, baixas: [{ id: 'b2', data: dIso(-10), valor: 149.9, juros: 0, desconto: 0, forma: 'cartao', conta_bancaria_id: 'cb2' }] }),
   L('la10', 'receber', 'Aluguel da sala comercial', 900, 2, { ...pc('1.04'), cliente: { nome: 'Clínica Bem-Estar' } }),
   L('la11', 'receber', 'Aferição de pressão e glicemia', 340, 9, { ...pc('1.02') }),
 ]
@@ -177,6 +187,7 @@ const TABELAS = {
     { id: 'cb2', nome: 'Banpará, conta 12345-6', tipo: 'banco', saldo_inicial: 8200, data_saldo: '2026-01-01', ativo: true },
   ],
   lancamentos: LANCAMENTOS,
+  despesas_fixas: FIXAS,
   inventarios: [
     { id: 'iv2', numero: 4, descricao: 'Inventário de novembro de 2026', escopo: 'todos', categoria_id: null, status: 'aberto', criado_em: h(8, 5), finalizado_em: null, resumo: null, itens: [{ count: 8 }] },
     { id: 'iv1', numero: 3, descricao: 'Higiene e beleza', escopo: 'categoria', categoria_id: 'k2', status: 'finalizado', criado_em: '2026-10-28T11:00:00Z', finalizado_em: '2026-10-28T19:30:00Z', resumo: { itens_ajustados: 4, sobra_qtd: 3, falta_qtd: 7, sobra_valor: 41.2, falta_valor: 187.9 }, itens: [{ count: 46 }] },
@@ -213,7 +224,34 @@ const TABELAS = {
   ],
   nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
 }
+// Valores por conta e mês com variação estável (mesma semente, mesmo número)
+function relatorioDemo({ p_inicio, p_fim }) {
+  const base = { '2.01': 1290, '3.01': 9800, '3.02': 310, '4.01': 2200, '4.02': 690, '4.03': 4380, '4.05': 650, '4.06': 149.9, '4.07': 210, '4.08': 160, '4.09': 120, '4.10': 380, '4.11': 95, '5.01': 22, '6.01': 3000, '1.02': 340, '1.04': 900 }
+  const out = []
+  for (let d = new Date(`${p_inicio}T12:00`); d.toISOString().slice(0, 10) <= p_fim; d.setMonth(d.getMonth() + 1)) {
+    const mes = d.toISOString().slice(0, 7)
+    if (mes > agora.toISOString().slice(0, 7)) break
+    const k = d.getMonth() + 1
+    for (const [codigo, v] of Object.entries(base)) {
+      const p = PLANO.find((x) => x.codigo === codigo)
+      const varia = ['4.01', '4.03', '4.05', '4.06'].includes(codigo) ? 1 : 0.78 + (((k * 37 + codigo.charCodeAt(2) * 11) % 50) / 100)
+      if (codigo === '4.09' && k % 3) continue
+      out.push({ mes, plano_conta_id: p.id, codigo, nome: p.nome, tipo: p.tipo, grupo: p.grupo_dre, valor: Math.round(v * varia * 100) / 100, qtd: 1 })
+    }
+  }
+  return out
+}
+
 const RPC = {
+  gerar_despesas_fixas: 0,
+  historico_financeiro: [
+    { id: 9, acao: 'pagou', quando: h(10, 12), usuario: 'Carlos Lima', descricao: 'Aluguel da loja', tipo: 'pagar', valor: 1000, detalhes: { data: dIso(-2), forma: 'pix', juros: 0, desconto: 0 } },
+    { id: 8, acao: 'editou', quando: h(9, 40), usuario: 'Brenda Souza', descricao: 'Energia elétrica', tipo: 'pagar', valor: 486.32, detalhes: { antes: { valor: 480 }, depois: { valor: 486.32 } } },
+    { id: 7, acao: 'criou', quando: h(9, 31), usuario: 'Brenda Souza', descricao: 'Energia elétrica', tipo: 'pagar', valor: 486.32, detalhes: {} },
+    { id: 6, acao: 'reclassificou', quando: h(8, 55), usuario: 'Carlos Lima', descricao: 'Sistema de gestão', tipo: 'pagar', valor: 149.9, detalhes: { antes: { plano_conta_id: 'pc18' }, depois: { plano_conta_id: 'pc13' } } },
+    { id: 5, acao: 'gerou_fixa', quando: h(8, 2), usuario: 'Carlos Lima', descricao: 'Salários', tipo: 'pagar', valor: 4380, detalhes: {} },
+    { id: 4, acao: 'cancelou', quando: h(8, 1), usuario: 'Carlos Lima', descricao: 'Frete avulso', tipo: 'pagar', valor: 45, detalhes: {} },
+  ],
   painel_dia: {
     total: 300.3, qtd: 5, itens: 17, descontos: 5.7, ontem_total: 268.4, ontem_qtd: 6, canceladas: 1,
     por_hora: [0, 0, 0, 0, 0, 0, 0, 0, 0, 13.8, 0, 66.8, 0, 0, 0, 110, 115.5, 0, 0, 0, 0, 0, 0, 0],
@@ -335,6 +373,7 @@ export const clienteDemo = {
     }
     if (nome === 'fluxo_caixa') return { data: fluxoDemo(args), error: null }
     if (nome === 'dre') return { data: dreDemo(args), error: null }
+    if (nome === 'relatorio_contas') return { data: relatorioDemo(args), error: null }
     return { data: RPC[nome] ?? null, error: null }
   },
   functions: { invoke: async () => ({ data: { titular: EMP.certificado_titular, validade: EMP.certificado_validade, sefaz: { codigo: '107', mensagem: 'Serviço em Operação' } }, error: null }) },

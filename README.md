@@ -37,6 +37,7 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Fiscal independente de terceiros — regras de tributação por NCM (ICMS, PIS e COFINS, com campos do IBS e da CBS guardados), fotografia fiscal da venda, NFC-e com CST 00/20 e PIS/COFINS, SPED Fiscal (EFD ICMS/IPI leiaute 020) e tabela CMED com conferência do PMC
 - [x] Controlados (controle interno) — lista da Portaria 344 por produto, receita obrigatória na venda com validade e dados do comprador e do prescritor, livro de registro e balanço; PIX com QR Code fixo e leitura de etiqueta de balança
 - [x] Impressão em bobina 58/80 mm (comprovante não fiscal, crediário com assinatura, sangria, suprimento, fechamento e recebimento), leitura de boleto pela câmera e alertas de vencimento (contas, lotes e certificado)
+- [x] Controle de despesas — despesas fixas lançadas sozinhas todo mês, relatório mês a mês e ano por conta (despesas, compras, retiradas e receitas separadas), conferência de repetidos e esquecidos, reclassificação em grupo, histórico de alterações, sugestão de conta pela descrição, filtros por mês, exportação e leitura de boleto por foto
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

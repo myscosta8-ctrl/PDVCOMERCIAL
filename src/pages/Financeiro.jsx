@@ -4,33 +4,28 @@ import { useSessao } from '../lib/sessao.js'
 import { dinheiro, lerNumero, arred } from '../lib/formato.js'
 import { lerBoleto, NOMES_BANCOS } from '../lib/boleto.js'
 import { LeitorBoleto } from '../components/LeitorCamera.jsx'
+import { contaPorPalavra, semAvisoEstimado, paraCsv, baixarArquivo } from '../lib/financeiro.js'
+import { DespesasFixas } from './financeiro/DespesasFixas.jsx'
+import { Relatorios } from './financeiro/Relatorios.jsx'
+import { Conferencia } from './financeiro/Conferencia.jsx'
 import { Botao, Cabecalho, Campo, Confirmacao, Etiqueta, Icone, Indicador, Lista, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 
-const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
-const somaDias = (d, n) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10) }
-const somaMeses = (d, n) => {
-  const [a, m, dia] = d.split('-').map(Number)
-  const ult = new Date(a, m - 1 + n + 1, 0).getDate()
-  const x = new Date(a, m - 1 + n, Math.min(dia, ult), 12)
-  return x.toISOString().slice(0, 10)
-}
-const dataBR = (d) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '')
-const reais = (v) => (v == null || v === '' ? '' : Number(v).toFixed(2).replace('.', ','))
-const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+import { hojeISO, somaDias, somaMeses, dataBR, reais, MESES } from './financeiro/comum.js'
 
 const FORMAS = [
   { valor: 'pix', texto: 'PIX' }, { valor: 'boleto', texto: 'Boleto' }, { valor: 'transferencia', texto: 'Transferência' },
   { valor: 'dinheiro', texto: 'Dinheiro' }, { valor: 'debito', texto: 'Débito automático' }, { valor: 'cartao', texto: 'Cartão de crédito' },
   { valor: 'cheque', texto: 'Cheque' },
 ]
-const GRUPOS_DRE = [
+export const GRUPOS_DRE = [
   { valor: 'receita_bruta', texto: 'Receita bruta' }, { valor: 'deducoes', texto: 'Deduções e impostos sobre vendas' },
   { valor: 'despesas_operacionais', texto: 'Despesas operacionais' }, { valor: 'despesas_financeiras', texto: 'Despesas financeiras' },
   { valor: 'receitas_financeiras', texto: 'Receitas financeiras' }, { valor: 'outras_receitas', texto: 'Outras receitas' },
   { valor: 'estoque', texto: 'Compras para estoque (vai ao CMV, fora da DRE)' }, { valor: 'nao_operacional', texto: 'Não operacional (fora da DRE)' },
 ]
 const SITUACOES = [
-  { valor: 'aberto', texto: 'Em aberto' }, { valor: 'vencido', texto: 'Vencidas' }, { valor: 'pago', texto: 'Pagas' },
+  { valor: 'aberto', texto: 'Em aberto' }, { valor: 'vencido', texto: 'Vencidas' }, { valor: 'semana', texto: 'Vencem em 7 dias' },
+  { valor: 'mes', texto: 'Vencem neste mês' }, { valor: 'pago', texto: 'Pagas' },
   { valor: 'cancelado', texto: 'Canceladas' }, { valor: 'todos', texto: 'Todas' },
 ]
 const REPETICAO = [
@@ -76,9 +71,17 @@ export default function Financeiro() {
     if (l.error) avisar(mensagemErro(l.error), 'erro')
     setLancs(l.data ?? []); setCliTitulos(cr.data ?? [])
   }
-  useEffect(() => { carregarCadastros(); carregarLancamentos() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    carregarCadastros()
+    // Lança as despesas fixas do mês antes de mostrar as contas (não duplica)
+    supabase.rpc('gerar_despesas_fixas').then(({ data }) => {
+      if (data > 0) avisar(`${data} despesa(s) fixa(s) lançada(s) para este mês.`)
+      carregarLancamentos()
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ABAS = [['geral', 'Visão geral'], ['pagar', 'Contas a pagar'], ['receber', 'Contas a receber'], ['fluxo', 'Fluxo de caixa'], ['dre', 'DRE'], ['cadastros', 'Plano de contas e cadastros']]
+  const ABAS = [['geral', 'Visão geral'], ['pagar', 'Contas a pagar'], ['receber', 'Contas a receber'], ['fixas', 'Despesas fixas'], ['fluxo', 'Fluxo de caixa'],
+    ['relatorios', 'Relatórios e DRE'], ['conferencia', 'Conferência e histórico'], ['cadastros', 'Plano de contas e cadastros']]
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -94,7 +97,9 @@ export default function Financeiro() {
       )}
       {aba === 'geral' && <VisaoGeral admin={admin} irPara={setAba} />}
       {aba === 'fluxo' && <Fluxo />}
-      {aba === 'dre' && <Dre centros={cad.centros} />}
+      {aba === 'fixas' && <DespesasFixas cad={cad} lancs={lancs} recarregarLancamentos={carregarLancamentos} />}
+      {aba === 'relatorios' && <Relatorios cad={cad} dre={<Dre centros={cad.centros} />} />}
+      {aba === 'conferencia' && <Conferencia cad={cad} lancs={lancs} recarregar={carregarLancamentos} />}
       {aba === 'cadastros' && <Cadastros cad={cad} recarregar={carregarCadastros} />}
     </div>
   )
@@ -309,6 +314,8 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
   const hoje = hojeISO()
   const pagar = tipo === 'pagar'
   const [filtro, setFiltro] = useState('aberto')
+  const [mesFiltro, setMesFiltro] = useState(null)
+  const [reclassificar, setReclassificar] = useState(null)
   const [busca, setBusca] = useState('')
   const [form, setForm] = useState(null)
   const [detalhe, setDetalhe] = useState(null)
@@ -331,12 +338,29 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
     return doTipo.filter((l) => {
       if (filtro === 'aberto' && l.status !== 'aberto') return false
       if (filtro === 'vencido' && !(l.status === 'aberto' && l.vencimento < hoje)) return false
+      if (filtro === 'semana' && !(l.status === 'aberto' && l.vencimento >= hoje && l.vencimento <= somaDias(hoje, 7))) return false
+      if (filtro === 'mes' && !(l.status === 'aberto' && l.vencimento.slice(0, 7) === hoje.slice(0, 7))) return false
+      if (mesFiltro && l.vencimento.slice(0, 7) !== mesFiltro) return false
       if ((filtro === 'pago' || filtro === 'cancelado') && l.status !== filtro) return false
       if (!t) return true
       return [l.descricao, l.documento, l.fornecedor?.razao_social, l.fornecedor?.nome_fantasia, l.cliente?.nome, l.plano?.nome]
         .some((x) => String(x ?? '').toLowerCase().includes(t))
     })
-  }, [doTipo, filtro, busca, hoje])
+  }, [doTipo, filtro, busca, hoje, mesFiltro])
+  const totalLista = visiveis.reduce((t, l) => ({ valor: t.valor + Number(l.valor), aberto: t.aberto + (l.status === 'aberto' ? aberto(l) : 0) }), { valor: 0, aberto: 0 })
+  const mesesFiltro = useMemo(() => {
+    const ms = [...new Set(doTipo.map((l) => l.vencimento.slice(0, 7)))].sort().reverse()
+    return [{ valor: null, texto: 'Todos os meses' }, ...ms.map((m) => ({ valor: m, texto: `${MESES[Number(m.slice(5)) - 1]} de ${m.slice(0, 4)}` }))]
+  }, [doTipo])
+  const exportar = () => {
+    baixarArquivo(`contas-a-${pagar ? 'pagar' : 'receber'}-${hoje}.csv`, paraCsv(
+      ['Vencimento', 'Competência', 'Descrição', pagar ? 'Fornecedor' : 'Cliente', 'Código', 'Conta', 'Centro de custo', 'Documento', 'Valor', 'Pago', 'Em aberto', 'Situação'],
+      visiveis.map((l) => [dataBR(l.vencimento), dataBR(l.competencia), l.descricao, pessoa(l), l.plano?.codigo, l.plano?.nome, l.centro?.nome, l.documento,
+        Number(l.valor), Number(l.valor_pago), l.status === 'aberto' ? aberto(l) : 0, situacao(l, hoje).texto])))
+  }
+  const copiarLinha = async (linha) => {
+    try { await navigator.clipboard.writeText(linha); avisar('Linha digitável copiada.') } catch { avisar('Não foi possível copiar. Selecione e copie a linha.', 'erro') }
+  }
 
   const titulosCliente = !pagar ? cliTitulos : []
   const pessoa = (l) => (pagar ? l.fornecedor?.nome_fantasia || l.fornecedor?.razao_social : l.cliente?.nome) || '—'
@@ -378,11 +402,13 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
 
       <div className="mt-4 cartao overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-papel-200 p-3 dark:border-noite-700">
-          <div className="w-44"><Lista valor={filtro} opcoes={SITUACOES} onMudar={setFiltro} /></div>
+          <div className="w-48"><Lista valor={filtro} opcoes={SITUACOES} onMudar={setFiltro} /></div>
+          <div className="w-48"><Lista valor={mesFiltro} opcoes={mesesFiltro} onMudar={setMesFiltro} /></div>
           <div className="relative min-w-[14rem] flex-1">
             <Icone nome="busca" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-tinta-400" />
             <input className="campo pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={`Buscar por descrição, documento, ${pagar ? 'fornecedor' : 'cliente'} ou conta`} />
           </div>
+          <Botao variante="secundario" icone="nota" onClick={exportar} disabled={!visiveis.length}>Exportar</Botao>
           <Botao icone="mais" onClick={novo}>{pagar ? 'Nova conta a pagar' : 'Nova conta a receber'}</Botao>
         </div>
         {lancs === null ? <p className="p-5 text-sm text-tinta-400">Carregando…</p> : visiveis.length === 0 ? (
@@ -409,6 +435,7 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
                   )
                 })}
               </tbody>
+              <tfoot><tr className="font-semibold"><td colSpan={4}>{visiveis.length} lançamento(s)</td><td className="num text-right">{dinheiro(totalLista.valor)}</td><td className="num text-right">{dinheiro(totalLista.aberto)}</td><td /></tr></tfoot>
             </table>
           </div>
         )}
@@ -445,6 +472,7 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
         rodape={detalhe && <>
           {detalhe.status === 'aberto' && Number(detalhe.valor_pago) === 0 && <Botao variante="secundario" className="mr-auto" onClick={() => setCancelar(detalhe)}>Cancelar lançamento</Botao>}
           {detalhe.status === 'aberto' && <Botao variante="secundario" onClick={() => { editar(detalhe); setDetalhe(null) }}>Editar</Botao>}
+          {detalhe.status === 'pago' && <Botao variante="secundario" onClick={() => { setReclassificar({ l: detalhe, plano_conta_id: detalhe.plano_conta_id, centro_custo_id: detalhe.centro_custo_id }); setDetalhe(null) }}>Reclassificar</Botao>}
           {detalhe.status === 'aberto'
             ? <Botao icone="ok" onClick={() => { setBaixa({ l: detalhe, data: hoje, valor: reais(aberto(detalhe)), juros: '', desconto: '', conta: (cad.contas.find((c) => c.ativo && c.tipo === 'banco') ?? cad.contas.find((c) => c.ativo))?.id ?? null, forma: pagar ? 'boleto' : 'pix' }); setDetalhe(null) }}>{pagar ? 'Registrar pagamento' : 'Registrar recebimento'}</Botao>
             : <Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>}
@@ -461,7 +489,12 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
               {detalhe.documento && <Dado rotulo="Documento" valor={detalhe.documento} />}
               {detalhe.parcelas > 1 && <Dado rotulo="Parcela" valor={`${detalhe.parcela} de ${detalhe.parcelas}`} />}
             </div>
-            {detalhe.linha_digitavel && <p className="break-all rounded-lg bg-papel-200 px-3 py-2 font-mono text-sm dark:bg-noite-700">{detalhe.linha_digitavel}</p>}
+            {detalhe.linha_digitavel && (
+              <div className="flex items-start gap-2 rounded-lg bg-papel-200 px-3 py-2 dark:bg-noite-700">
+                <p className="min-w-0 flex-1 break-all font-mono text-sm">{detalhe.linha_digitavel}</p>
+                <button className="shrink-0 text-sm font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => copiarLinha(detalhe.linha_digitavel)}>Copiar</button>
+              </div>
+            )}
             {detalhe.observacao && <p className="text-sm text-tinta-400">{detalhe.observacao}</p>}
             <div>
               <p className="mb-1 font-semibold">{pagar ? 'Pagamentos' : 'Recebimentos'}</p>
@@ -488,6 +521,7 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
         )}
       </TelaSuspensa>
 
+      {reclassificar && <JanelaReclassificar item={reclassificar} setItem={setReclassificar} cad={cad} pagar={pagar} onFeito={() => { setReclassificar(null); recarregar() }} />}
       {baixa && <FormBaixa baixa={baixa} setBaixa={setBaixa} contas={cad.contas} pagar={pagar} onFeito={() => { setBaixa(null); setDetalhe(null); recarregar() }} />}
       <Confirmacao aberta={!!cancelar} titulo="Cancelar lançamento" mensagem="O lançamento deixa de contar no fluxo de caixa e na DRE. Esta ação não pode ser desfeita." textoConfirmar="Cancelar lançamento" variante="perigo" carregando={enviando} onCancelar={() => setCancelar(null)} onConfirmar={confirmarCancelamento} />
       <Confirmacao aberta={!!estorno} titulo="Estornar baixa" mensagem={estorno ? `A baixa de ${dinheiro(estorno.valor)} em ${dataBR(estorno.data)} será desfeita e o lançamento volta a ficar em aberto.` : ''} textoConfirmar="Estornar" variante="perigo" carregando={enviando} onCancelar={() => setEstorno(null)} onConfirmar={confirmarEstorno} />
@@ -562,7 +596,13 @@ function FormLancamento({ form, setForm, cad, lancs, onSalvo }) {
     })
   }
   const escolherPessoa = (v) => setForm((f) => aplicarSugestao({ ...f, pessoa_id: v }, v ? sugestaoDoHistorico(lancs, f.tipo, { pessoa_id: v }) : null))
-  const sairDescricao = () => setForm((f) => (f.plano_conta_id ? f : aplicarSugestao(f, sugestaoDoHistorico(lancs, f.tipo, { descricao: f.descricao }))))
+  const sairDescricao = () => setForm((f) => {
+    if (f.plano_conta_id) return f
+    const sug = sugestaoDoHistorico(lancs, f.tipo, { descricao: f.descricao })
+    if (sug) return aplicarSugestao(f, sug)
+    const plano = contaPorPalavra(f.descricao, cad.planos, f.tipo)
+    return plano && !f.id ? { ...f, plano_conta_id: plano, sugestao: 'nome da descrição' } : f
+  })
 
   const valor = lerNumero(form.valor)
   const vezes = form.repeticao === 'unica' || form.id ? 1 : Math.max(1, Math.min(120, parseInt(form.vezes, 10) || 1))
@@ -599,7 +639,7 @@ function FormLancamento({ form, setForm, cad, lancs, onSalvo }) {
     setEnviando(true)
     let r
     if (form.id) {
-      r = await supabase.from('lancamentos').update({ ...comum, valor, vencimento: form.vencimento, competencia: form.competencia }).eq('id', form.id)
+      r = await supabase.from('lancamentos').update({ ...comum, observacao: semAvisoEstimado(comum.observacao) || null, valor, vencimento: form.vencimento, competencia: form.competencia }).eq('id', form.id)
     } else {
       const grupo = crypto.randomUUID()
       r = await supabase.from('lancamentos').insert(parcelas.map((p, i) => ({
@@ -679,6 +719,29 @@ function FormLancamento({ form, setForm, cad, lancs, onSalvo }) {
       <LeitorBoleto aberta={camera} onFechar={() => setCamera(false)} onLido={(b) => { setCamera(false); preencherLinha(b.linha); avisar('Boleto lido pela câmera. Confira os dados.') }} />
       <Confirmacao aberta={!!repetido} titulo="Possível lançamento repetido" textoConfirmar="Lançar mesmo assim" onCancelar={() => setRepetido(null)} onConfirmar={() => { setRepetido(null); salvar(true) }}
         mensagem={repetido ? `Já existe "${repetido.descricao}" de ${dinheiro(repetido.valor)} com vencimento em ${dataBR(repetido.vencimento)}${repetido.status === 'pago' ? ', já pago' : ''}. Lançar de novo pode duplicar a conta.` : ''} />
+    </TelaSuspensa>
+  )
+}
+
+// Título pago: só troca a conta do plano e o centro de custo (corrige relatórios sem mexer no pagamento)
+function JanelaReclassificar({ item, setItem, cad, pagar, onFeito }) {
+  const avisar = useAviso()
+  const [enviando, setEnviando] = useState(false)
+  const planos = cad.planos.filter((p) => p.ativo && p.tipo === (pagar ? 'despesa' : 'receita'))
+  const salvar = async () => {
+    setEnviando(true)
+    const { error } = await supabase.from('lancamentos').update({ plano_conta_id: item.plano_conta_id, centro_custo_id: item.centro_custo_id }).eq('id', item.l.id)
+    setEnviando(false)
+    if (error) { avisar(mensagemErro(error), 'erro'); return }
+    avisar('Lançamento reclassificado.'); onFeito()
+  }
+  return (
+    <TelaSuspensa aberta titulo="Reclassificar lançamento" subtitulo={`${item.l.descricao}, ${dinheiro(item.l.valor)}. O pagamento não muda.`} onFechar={() => setItem(null)}
+      rodape={<><Botao variante="secundario" onClick={() => setItem(null)}>Cancelar</Botao><Botao onClick={salvar} carregando={enviando}>Salvar</Botao></>}>
+      <div className="space-y-3">
+        <Campo rotulo="Plano de contas"><Lista valor={item.plano_conta_id} opcoes={planos.map((p) => ({ valor: p.id, texto: `${p.codigo} ${p.nome}` }))} onMudar={(v) => setItem((x) => ({ ...x, plano_conta_id: v }))} /></Campo>
+        <Campo rotulo="Centro de custo"><Lista valor={item.centro_custo_id} opcoes={[{ valor: null, texto: 'Nenhum' }, ...cad.centros.filter((c) => c.ativo).map((c) => ({ valor: c.id, texto: c.nome }))]} onMudar={(v) => setItem((x) => ({ ...x, centro_custo_id: v }))} /></Campo>
+      </div>
     </TelaSuspensa>
   )
 }
