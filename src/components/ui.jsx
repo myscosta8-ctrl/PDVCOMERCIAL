@@ -29,13 +29,20 @@ export function Botao({ variante = 'primario', className = '', carregando, icone
   )
 }
 
+// Janelas abertas, da mais antiga para a mais recente: o Esc fecha só a de cima
+const pilhaJanelas = []
+
 export function TelaSuspensa({ aberta, titulo, subtitulo, onFechar, children, rodape, largura = 'max-w-lg' }) {
+  const fechar = useRef(onFechar)
+  fechar.current = onFechar
   useEffect(() => {
     if (!aberta) return
-    const tecla = (e) => e.key === 'Escape' && onFechar?.()
+    const id = Symbol('janela')
+    pilhaJanelas.push(id)
+    const tecla = (e) => { if (e.key === 'Escape' && pilhaJanelas[pilhaJanelas.length - 1] === id) { e.stopImmediatePropagation(); fechar.current?.() } }
     window.addEventListener('keydown', tecla)
-    return () => window.removeEventListener('keydown', tecla)
-  }, [aberta, onFechar])
+    return () => { window.removeEventListener('keydown', tecla); const k = pilhaJanelas.indexOf(id); if (k >= 0) pilhaJanelas.splice(k, 1) }
+  }, [aberta])
   if (!aberta) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/60 p-4 backdrop-blur-[2px]" onMouseDown={onFechar}>

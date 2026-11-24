@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { chamarNfce } from '../lib/nfce.js'
+import { normalizarChave } from '../lib/pix.js'
 import { dataHora, lerNumero } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Lista, Confirmacao, Icone, useAviso } from '../components/ui.jsx'
 
@@ -97,6 +98,19 @@ export default function Configuracoes() {
     carregar()
   }
 
+  const balanca = { ativo: false, digitos_codigo: 5, tipo: 'preco', ...(emp.balanca || {}) }
+  const mb = (c) => (v) => setEmp((x) => ({ ...x, balanca: { ...balanca, [c]: v } }))
+  const salvarPixBalanca = async () => {
+    if (emp.pix_chave && !normalizarChave(emp.pix_chave)) { avisar('Chave PIX inválida. Use CPF, CNPJ, e-mail, celular ou chave aleatória.', 'erro'); return }
+    setSalvando('pix')
+    const { error } = await supabase.from('empresas').update({
+      pix_chave: emp.pix_chave?.trim() || null, pix_nome: emp.pix_nome?.trim() || null, pix_cidade: emp.pix_cidade?.trim() || null, balanca,
+    }).eq('id', emp.id)
+    setSalvando('')
+    if (error) avisar(mensagemErro(error), 'erro')
+    else avisar('PIX e balança salvos.')
+  }
+
   const mudarAmbiente = (v) => (v === 1 ? setConfirmarProducao(true) : setEmp((x) => ({ ...x, nfce_ambiente: 2 })))
 
   return (
@@ -131,6 +145,25 @@ export default function Configuracoes() {
           <div className="sm:col-span-2"><Campo rotulo="Endereço de consulta pela chave"><input className="campo" value={emp.nfce_url_consulta ?? ''} onChange={m('nfce_url_consulta')} /></Campo></div>
         </div>
         <div className="flex justify-end"><Botao onClick={salvarEmpresa} carregando={salvando === 'empresa'}>Salvar dados</Botao></div>
+      </section>
+
+      <section className="cartao space-y-4 p-5">
+        <h2 className="titulo-secao">PIX e balança</h2>
+        <p className="text-sm text-tinta-400">O caixa mostra um QR Code PIX com o valor da venda. A confirmação é feita olhando o aplicativo do banco antes de concluir.</p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-2"><Campo rotulo="Chave PIX" ajuda={emp.pix_chave ? (normalizarChave(emp.pix_chave) ? `Será usada: ${normalizarChave(emp.pix_chave)}` : 'Chave não reconhecida') : 'CPF, CNPJ, e-mail, celular ou chave aleatória'}><input className="campo" value={emp.pix_chave ?? ''} onChange={m('pix_chave')} /></Campo></div>
+          <Campo rotulo="Nome do recebedor" ajuda="Até 25 letras, sem acentos no QR"><input className="campo" value={emp.pix_nome ?? ''} onChange={m('pix_nome')} placeholder={emp.nome_fantasia || emp.razao_social} /></Campo>
+          <Campo rotulo="Cidade"><input className="campo" value={emp.pix_cidade ?? ''} onChange={m('pix_cidade')} placeholder={emp.endereco.municipio} /></Campo>
+        </div>
+        <div className="grid gap-3 border-t border-papel-200 pt-4 sm:grid-cols-4 dark:border-noite-700">
+          <label className="flex items-center gap-2 sm:col-span-4"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={balanca.ativo} onChange={(e) => mb('ativo')(e.target.checked)} /> Ler etiquetas de balança (código de barras começando com 2)</label>
+          {balanca.ativo && <>
+            <Campo rotulo="Dígitos do código do produto"><Lista valor={Number(balanca.digitos_codigo)} opcoes={[4, 5, 6].map((n) => ({ valor: n, texto: `${n} dígitos` }))} onMudar={mb('digitos_codigo')} /></Campo>
+            <Campo rotulo="A etiqueta traz"><Lista valor={balanca.tipo} opcoes={[{ valor: 'preco', texto: 'O preço total' }, { valor: 'peso', texto: 'O peso' }]} onMudar={mb('tipo')} /></Campo>
+            <p className="self-end pb-2 text-sm text-tinta-400 sm:col-span-2">Cadastre o código da balança em cada produto vendido por peso (tela Produtos). Confira o formato no manual da balança.</p>
+          </>}
+        </div>
+        <div className="flex justify-end"><Botao onClick={salvarPixBalanca} carregando={salvando === 'pix'}>Salvar PIX e balança</Botao></div>
       </section>
 
       <section className="cartao space-y-4 p-5">

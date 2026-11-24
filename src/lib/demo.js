@@ -7,6 +7,7 @@ const EMP = {
   inscricao_estadual: '151234567', uf: 'PA', municipio_ibge: '1501808', regime_tributario: 'simples', nfce_ambiente: 2, nfce_serie: 1,
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
+  pix_chave: '12345678000195', pix_nome: 'Farma Familia', pix_cidade: 'Breves', balanca: { ativo: true, digitos_codigo: 5, tipo: 'preco' },
   contador: { nome: 'Escritório Contábil Exemplo', cpf: '12345678909', crc: 'PA-012345/O' }, sped_perfil: 'A', cod_receita_icms: null,
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
 }
@@ -19,7 +20,7 @@ const PRODUTOS = [
   P('p2', 'Paracetamol 750 mg, 20 comprimidos', '7896714200156', 12.5, 4.8, 12, 15),
   P('p3', 'Soro fisiológico 0,9%, 500 ml', '7898148290178', 8.9, 3.9, 46, 10, { unidade: 'FR' }),
   P('p4', 'Álcool etílico 70%, 1 litro', '7896020160014', 14.9, 7.2, 0, 8, { unidade: 'FR', ncm: '22071090' }),
-  P('p5', 'Clonazepam 2 mg, 30 comprimidos', '7896004711232', 18.4, 6.1, 9, 5, { controlado: true }),
+  P('p5', 'Clonazepam 2 mg, 30 comprimidos', '7896004711232', 18.4, 6.1, 9, 5, { controlado: true, lista_controle: 'B1', registro_ms: '1004300450021' }),
   P('p6', 'Protetor solar FPS 50, 120 ml', '7891010245321', 59.9, 31.0, 7, 6, { ncm: '33049910' }),
   P('p7', 'Fralda infantil tamanho G, 30 unidades', '7896007541124', 54.9, 38.5, 22, 10, { ncm: null, controla_lote: false, unidade: 'PCT' }),
   P('p8', 'Vitamina C 1 g efervescente, 10 comprimidos', '7896112402158', 16.9, 6.4, 31, 10),
@@ -204,6 +205,11 @@ const TABELAS = {
     { id: 'rf2', nome: 'Medicamentos com substituição tributária', ativo: true, prioridade: 100, ncm_prefixo: '3004', origem: null, cfop: '5405', csosn: '500', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '04', aliquota_pis: 0, cst_cofins: '04', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: 'Conferido com o contador' },
     { id: 'rf3', nome: 'Higiene pessoal monofásico', ativo: true, prioridade: 100, ncm_prefixo: '3305', origem: null, cfop: '5405', csosn: '500', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '04', aliquota_pis: 0, cst_cofins: '04', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: null },
   ],
+  receitas: [
+    { id: 'rc1', tipo: 'notificacao_b', numero: 'PA2611042', data_emissao: '2026-11-20', prescritor_nome: 'Dra. Helena Souza', prescritor_conselho: 'CRM', prescritor_numero: '8812', prescritor_uf: 'PA', paciente_nome: 'Joana Martins', paciente_idade: 54, paciente_sexo: 'F', comprador_nome: 'Joana Martins', comprador_documento: '4512387', comprador_orgao: 'SSP/PA', criado_em: h(10, 22), venda: { numero: 1044, status: 'concluida' }, itens: [{ quantidade: 1, produto: { descricao: 'Clonazepam 2 mg, 30 comprimidos' }, lote: { numero: 'CLZ2604', validade: '2027-04-30' } }] },
+    { id: 'rc2', tipo: 'antimicrobiano', numero: null, data_emissao: '2026-11-22', prescritor_nome: 'Dr. Paulo Lima', prescritor_conselho: 'CRM', prescritor_numero: '10231', prescritor_uf: 'PA', paciente_nome: 'Pedro Santos', paciente_idade: 8, paciente_sexo: 'M', comprador_nome: 'Raimundo Pereira', comprador_documento: '98765432100', criado_em: '2026-11-22T15:40:00Z', venda: { numero: 1031, status: 'concluida' }, itens: [{ quantidade: 1, produto: { descricao: 'Amoxicilina 250 mg/5 ml, suspensão 150 ml' }, lote: { numero: 'AMX2609', validade: '2027-09-30' } }] },
+    { id: 'rc3', tipo: 'controle_especial', numero: null, data_emissao: '2026-11-18', prescritor_nome: 'Dra. Helena Souza', prescritor_conselho: 'CRM', prescritor_numero: '8812', prescritor_uf: 'PA', paciente_nome: 'Luciana Farias', comprador_nome: 'Luciana Farias', comprador_documento: '45678912300', criado_em: '2026-11-18T13:05:00Z', venda: { numero: 1012, status: 'concluida' }, itens: [{ quantidade: 2, produto: { descricao: 'Sertralina 50 mg, 30 comprimidos' }, lote: null }] },
+  ],
   nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
 }
 const RPC = {
@@ -246,6 +252,20 @@ const RPC = {
                { cod_item: '108', descricao: 'Vitamina C 1 g efervescente, 10 comprimidos', ean: '7896112402158', unidade: 'UN', ncm: '30049099', aliquota_icms: 0 }],
     inventario: [],
   },
+  livro_controlados: [{
+    produto_id: 'p5', descricao: 'Clonazepam 2 mg, 30 comprimidos', lista: 'B1', registro_ms: '1004300450021', unidade: 'UN', inicial: 4,
+    movimentos: [
+      { data: '2026-11-05T13:00:00Z', tipo: 'entrada', quantidade: 10, lote: 'CLZ2604', validade: '2027-04-30', documento: 'NF-e 88301, Distribuidora Norte Farma Ltda', saldo: 14 },
+      { data: '2026-11-12T16:20:00Z', tipo: 'saida_venda', quantidade: -2, lote: 'CLZ2604', validade: '2027-04-30', documento: 'Venda 1003 — receita PA2610988, CRM 8812/PA, comprador Ana Costa', saldo: 12 },
+      { data: '2026-11-19T11:02:00Z', tipo: 'perda', quantidade: -1, lote: 'CLZ2604', validade: '2027-04-30', documento: 'Embalagem danificada', saldo: 11 },
+      { data: h(10, 22), tipo: 'saida_venda', quantidade: -1, lote: 'CLZ2604', validade: '2027-04-30', documento: 'Venda 1044 — receita PA2611042, CRM 8812/PA, comprador Joana Martins', saldo: 10 },
+    ],
+  }],
+  balanco_controlados: [
+    { descricao: 'Clonazepam 2 mg, 30 comprimidos', lista: 'B1', registro_ms: '1004300450021', inicial: 6, entradas: 20, saidas: 15, perdas: 1, ajustes: 0, final: 10 },
+    { descricao: 'Sertralina 50 mg, 30 comprimidos', lista: 'C1', registro_ms: '1057301230014', inicial: 12, entradas: 30, saidas: 26, perdas: 0, ajustes: -1, final: 15 },
+    { descricao: 'Amoxicilina 250 mg/5 ml, suspensão 150 ml', lista: 'AM', registro_ms: '1004301100042', inicial: 8, entradas: 24, saidas: 19, perdas: 0, ajustes: 0, final: 13 },
+  ],
   filiais: [{ id: 'e2', nome: 'Farma Família Centro', cnpj: '12345678000276' }],
   painel_financeiro: {
     hoje: new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 10), dias_mes: 30,

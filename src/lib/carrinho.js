@@ -19,6 +19,8 @@ export function adicionar(itens, produto, quantidade = 1, lote = null) {
       quantidade,
       desconto: 0,
       e_kit: Boolean(produto.e_kit),
+      controlado: Boolean(produto.controlado),
+      lista_controle: produto.lista_controle ?? null,
       lote_id: lote?.id ?? null,
       lote_numero: lote?.numero ?? null,
       lote_validade: lote?.validade ?? null,

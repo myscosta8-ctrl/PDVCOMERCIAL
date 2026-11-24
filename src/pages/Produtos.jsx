@@ -8,10 +8,19 @@ import { JanelaEtiquetas } from '../components/Etiquetas.jsx'
 import { GerenciarGrade } from '../components/Grade.jsx'
 import { precoSugerido, markupDeMargem } from '../lib/carrinho.js'
 
+export const LISTAS_CONTROLE = [
+  { valor: 'A1', texto: 'A1: entorpecentes (notificação A)' }, { valor: 'A2', texto: 'A2: entorpecentes de uso permitido (notificação A)' },
+  { valor: 'A3', texto: 'A3: psicotrópicos (notificação A)' }, { valor: 'B1', texto: 'B1: psicotrópicos (notificação B)' },
+  { valor: 'B2', texto: 'B2: psicotrópicos anorexígenos (notificação B2)' }, { valor: 'C1', texto: 'C1: outras de controle especial (receita de controle especial)' },
+  { valor: 'C2', texto: 'C2: retinoides (notificação especial)' }, { valor: 'C3', texto: 'C3: imunossupressores (notificação especial)' },
+  { valor: 'C4', texto: 'C4: antirretrovirais (receita de controle especial)' }, { valor: 'C5', texto: 'C5: anabolizantes (receita de controle especial)' },
+  { valor: 'AM', texto: 'Antimicrobiano (receita em 2 vias, validade de 10 dias)' },
+]
+
 const VAZIO = {
   descricao: '', codigo: '', ean: '', unidade: 'UN', preco_venda: '', preco_custo: '', estoque_minimo: '',
   categoria_id: null, ncm: '', cest: '', cfop: '5102', origem: 0, csosn: '102', cst_icms: '', controla_lote: false,
-  registro_ms: '', controlado: false, ativo: true, markup: '', e_kit: false, componentes: [],
+  registro_ms: '', controlado: false, lista_controle: null, codigo_balanca: '', ativo: true, markup: '', e_kit: false, componentes: [],
 }
 const UNIDADES = ['UN', 'CX', 'FR', 'CP', 'KG', 'G', 'L', 'ML', 'M', 'PCT', 'PAR'].map((u) => ({ valor: u, texto: u }))
 const ORIGENS = [
@@ -99,7 +108,10 @@ export default function Produtos() {
       p[c] = lerNumero(p[c])
       if (Number.isNaN(p[c]) || p[c] < 0) { avisar('Valores numéricos inválidos.', 'erro'); return }
     }
-    for (const c of ['codigo', 'ean', 'ncm', 'cest', 'cst_icms', 'registro_ms']) p[c] = p[c]?.trim() || null
+    for (const c of ['codigo', 'ean', 'ncm', 'cest', 'cst_icms', 'registro_ms', 'codigo_balanca']) p[c] = p[c]?.trim() || null
+    if (!p.controlado) p.lista_controle = null
+    if (p.controlado && farmacia && !p.lista_controle) { avisar('Informe a lista do controlado (Portaria 344 ou antimicrobiano).', 'erro'); return }
+    if (p.controlado && !p.controla_lote) p.controla_lote = true
     if (p.ncm && !/^\d{8}$/.test(p.ncm)) { avisar('O NCM deve ter 8 números.', 'erro'); return }
     p.markup = p.markup === '' || p.markup == null ? null : lerNumero(p.markup)
     if (p.markup != null && (Number.isNaN(p.markup) || p.markup < 0)) { avisar('Markup inválido.', 'erro'); return }
@@ -329,6 +341,7 @@ export default function Produtos() {
                 <Campo rotulo="CSOSN" ajuda="Simples Nacional"><input className="campo num" inputMode="numeric" maxLength={3} value={edicao.csosn ?? ''} onChange={m('csosn')} /></Campo>
                 <div className="sm:col-span-2"><Campo rotulo="Origem da mercadoria"><Lista valor={Number(edicao.origem)} opcoes={ORIGENS} onMudar={(v) => setEdicao((x) => ({ ...x, origem: v }))} /></Campo></div>
                 <Campo rotulo="CST do ICMS" ajuda="Regime normal"><input className="campo num" inputMode="numeric" maxLength={3} value={edicao.cst_icms ?? ''} onChange={m('cst_icms')} /></Campo>
+                <Campo rotulo="Código na balança" ajuda="Só para vendidos por peso"><input className="campo num" inputMode="numeric" maxLength={6} value={edicao.codigo_balanca ?? ''} onChange={m('codigo_balanca')} /></Campo>
               </div>
             </fieldset>
 
@@ -339,6 +352,7 @@ export default function Produtos() {
                   <Campo rotulo="Registro no Ministério da Saúde"><input className="campo num" value={edicao.registro_ms ?? ''} onChange={m('registro_ms')} /></Campo>
                   <label className="flex items-center gap-2 pb-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={edicao.controlado} onChange={m('controlado')} /> Medicamento sujeito a controle especial</label>
                   <label className="flex items-center gap-2 pb-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={edicao.controla_lote} onChange={m('controla_lote')} /> Controla lote e validade</label>
+                  {edicao.controlado && <div className="sm:col-span-2"><Campo rotulo="Lista do controle" ajuda="Define o tipo de receita exigido no caixa"><Lista valor={edicao.lista_controle ?? null} opcoes={LISTAS_CONTROLE} onMudar={(v) => setEdicao((x) => ({ ...x, lista_controle: v }))} /></Campo></div>}
                 </div>
               </fieldset>
             )}

@@ -17,6 +17,7 @@ import Precos from './pages/Precos.jsx'
 import Financeiro from './pages/Financeiro.jsx'
 import Estoque from './pages/Estoque.jsx'
 import Fiscal from './pages/Fiscal.jsx'
+import Controlados from './pages/Controlados.jsx'
 
 const TELAS = [
   { id: 'inicio', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
@@ -29,6 +30,7 @@ const TELAS = [
   { id: 'entradas', nome: 'Entrada de mercadorias', icone: 'estoque', papeis: ['administrador', 'gerente'] },
   { id: 'estoque', nome: 'Inventário', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'financeiro', nome: 'Financeiro', icone: 'grafico', papeis: ['administrador', 'gerente'] },
+  { id: 'controlados', nome: 'Controlados', icone: 'alerta', papeis: ['administrador', 'gerente'], segmento: 'farmacia' },
   { id: 'fiscal', nome: 'Fiscal', icone: 'nota', papeis: ['administrador', 'gerente'] },
   { id: 'vendas', nome: 'Vendas', icone: 'vendas', papeis: ['administrador', 'gerente'] },
   { id: 'configuracoes', nome: 'Configurações', icone: 'configuracoes', papeis: ['administrador'] },
@@ -81,7 +83,7 @@ function Principal() {
 
 function Painel() {
   const perfil = useSessao()
-  const telas = TELAS.filter((t) => t.papeis.includes(perfil.papel))
+  const telas = TELAS.filter((t) => t.papeis.includes(perfil.papel) && (!t.segmento || t.segmento === perfil.empresa.segmento))
   const [tela, setTela] = useState(() => {
     let salva
     try { salva = localStorage.getItem('tela') } catch {}
@@ -162,6 +164,7 @@ function Painel() {
           {tela === 'precos' && perfil.papel !== 'operador' && <Precos />}
           {tela === 'estoque' && <Estoque />}
           {tela === 'financeiro' && perfil.papel !== 'operador' && <Financeiro />}
+          {tela === 'controlados' && perfil.papel !== 'operador' && <Controlados />}
           {tela === 'fiscal' && perfil.papel !== 'operador' && <Fiscal />}
           {tela === 'vendas' && perfil.papel !== 'operador' && <Vendas />}
           {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}

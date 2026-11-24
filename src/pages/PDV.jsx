@@ -9,6 +9,10 @@ import { Botao, Campo, Confirmacao, Etiqueta, Icone, TelaSuspensa, Vazio, useAvi
 import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
 import { SeletorCliente, SituacaoCliente, carregarSituacao } from '../components/Clientes.jsx'
 import { Lista } from '../components/ui.jsx'
+import { JanelaReceita } from '../components/Receita.jsx'
+import { lerEtiquetaBalanca, quantidadeDaEtiqueta } from '../lib/balanca.js'
+import { gerarPix } from '../lib/pix.js'
+import QRCode from 'qrcode'
 
 const FORMAS = [
   { forma: 'dinheiro', texto: 'Dinheiro', tecla: '1' },
@@ -35,9 +39,22 @@ function Tecla({ children }) {
   return <kbd className="num rounded border border-papel-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-tinta-600 dark:border-noite-600 dark:bg-noite-700 dark:text-tinta-300">{children}</kbd>
 }
 
+// Configurações do caixa que vêm da empresa: PIX e balança
+function useConfigCaixa() {
+  const [cfg, setCfg] = useState({})
+  useEffect(() => {
+    supabase.from('empresas').select('*').single().then(({ data }) => data && setCfg({
+      balanca: data.balanca, uf: data.uf,
+      pix: data.pix_chave ? { chave: data.pix_chave, nome: data.pix_nome || data.nome_fantasia || data.razao_social, cidade: data.pix_cidade || data.endereco?.municipio } : null,
+    }))
+  }, [])
+  return cfg
+}
+
 export default function PDV() {
   const perfil = useSessao()
   const { caixa } = useCaixaAberto()
+  const cfg = useConfigCaixa()
   const avisar = useAviso()
   const busca = useRef(null)
   const [termo, setTermo] = useState('')
@@ -81,7 +98,7 @@ export default function PDV() {
       const { data: pv } = await supabase.from('pre_vendas').select('*').eq('id', id).maybeSingle()
       if (!pv || pv.status !== 'aberto') { avisar('Orçamento não está mais disponível.', 'erro'); return }
       const ids = pv.itens.map((i) => i.produto_id)
-      const { data: prods } = await supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, ativo, e_kit, controla_lote').in('id', ids)
+      const { data: prods } = await supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, lista_controle, ativo, e_kit, controla_lote').in('id', ids)
       let novos = []
       const fora = []
       for (const i of pv.itens) {
@@ -143,8 +160,21 @@ export default function PDV() {
     if (!q) return
     if (!(quantidade > 0)) { avisar('Quantidade inválida.', 'erro'); return }
     const limpo = q.replace(/[%,()]/g, '')
+    // Etiqueta de balança: 2 + código do produto + preço ou peso
+    const etiqueta = lerEtiquetaBalanca(limpo, cfg.balanca)
+    if (etiqueta?.erro) { avisar(etiqueta.erro, 'erro'); return }
+    if (etiqueta) {
+      const { data: pb, error: eb } = await supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, lista_controle, controla_lote, e_kit, e_grade')
+        .eq('ativo', true).eq('codigo_balanca', etiqueta.plu).limit(1)
+      if (eb) { avisar(mensagemErro(eb), 'erro'); return }
+      if (!pb?.length) { avisar(`Nenhum produto com o código de balança ${etiqueta.plu}.`, 'erro'); return }
+      const qb = quantidadeDaEtiqueta(etiqueta, Number(pb[0].preco_venda))
+      if (!(qb > 0)) { avisar(`Produto ${pb[0].descricao} sem preço por quilo.`, 'erro'); return }
+      incluir(pb[0], qb); setTermo(''); setResultados([])
+      return
+    }
     const soNumeros = /^\d{6,14}$/.test(limpo)
-    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, controla_lote, e_kit, e_grade').eq('ativo', true).limit(20)
+    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, lista_controle, controla_lote, e_kit, e_grade').eq('ativo', true).limit(20)
     consulta = soNumeros ? consulta.or(`ean.eq.${limpo},codigo.eq.${limpo}`) : consulta.or(`descricao.ilike.%${limpo}%,codigo.eq.${limpo}`)
     const { data, error } = await consulta
     if (error) { avisar(mensagemErro(error), 'erro'); return }
@@ -407,14 +437,25 @@ export default function PDV() {
       )}
 
       {pagamentoAberto && (
-        <Pagamento caixa={caixa} itens={itens} cliente={cliente} tabela={tabela} onFechar={() => setPagamentoAberto(false)} onConcluir={concluida} />
+        <Pagamento caixa={caixa} itens={itens} cliente={cliente} tabela={tabela} cfg={cfg} onFechar={() => setPagamentoAberto(false)} onConcluir={concluida} />
       )}
     </div>
   )
 }
 
-function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
+function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir }) {
   const avisar = useAviso()
+  const controlados = itens.filter((i) => i.controlado)
+  const [receita, setReceita] = useState(null)
+  const [pedirReceita, setPedirReceita] = useState(false)
+  const [qrPix, setQrPix] = useState(null)
+  const mostrarPix = async (v) => {
+    if (!cfg?.pix) return
+    try {
+      const payload = gerarPix({ ...cfg.pix, valor: v })
+      setQrPix({ valor: v, payload, imagem: await QRCode.toDataURL(payload, { margin: 1, width: 280 }) })
+    } catch (e) { avisar(e.message, 'erro') }
+  }
   const [desconto, setDesconto] = useState('')
   const [cpf, setCpf] = useState('')
   const [pagamentos, setPagamentos] = useState([])
@@ -454,6 +495,7 @@ function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
     if (forma === 'crediario') { pg.parcelas = parcelas; pg.primeiro_vencimento = primeiroVenc }
     setPagamentos((p) => [...p, pg])
     setValor('')
+    if (forma === 'pix') mostrarPix(arred(v))
   }
 
   useEffect(() => {
@@ -466,7 +508,8 @@ function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
     return () => window.removeEventListener('keydown', tecla)
   })
 
-  const finalizar = async () => {
+  const finalizar = async (rec = receita) => {
+    if (controlados.length && !rec) { setPedirReceita('concluir'); return }
     setEnviando(true)
     const { data, error } = await supabase.rpc('finalizar_venda', {
       p_caixa: caixa.id,
@@ -476,6 +519,7 @@ function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
       p_cliente: cliente?.id ?? null,
       p_tabela: tabela,
       p_cpf: cpf.replace(/\D/g, '') || null,
+      ...(rec ? { p_receitas: [rec] } : {}),
     })
     setEnviando(false)
     if (error) { avisar(mensagemErro(error), 'erro'); return }
@@ -484,7 +528,7 @@ function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
 
   const podeFinalizar = t.falta === 0 && t.trocoValido && t.total >= 0
 
-  return (
+  return (<>
     <TelaSuspensa
       aberta
       titulo="Pagamento"
@@ -493,7 +537,7 @@ function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
       largura="max-w-2xl"
       rodape={<>
         <Botao variante="secundario" onClick={onFechar}>Voltar à venda</Botao>
-        <Botao variante="sucesso" onClick={finalizar} disabled={!podeFinalizar} carregando={enviando}>Concluir venda</Botao>
+        <Botao variante="sucesso" onClick={() => finalizar()} disabled={!podeFinalizar} carregando={enviando}>{controlados.length && !receita ? 'Informar receita e concluir' : 'Concluir venda'}</Botao>
       </>}
     >
       <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-papel-200 text-center dark:border-noite-700">
@@ -530,12 +574,19 @@ function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
         </div>
       )}
 
+      {controlados.length > 0 && (
+        <div className={`mt-4 flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm ${receita ? 'bg-caixa-50 dark:bg-caixa-700/20' : 'bg-ambar-50 dark:bg-ambar-600/10'}`}>
+          <span>{receita ? `Receita registrada: ${receita.prescritor_conselho} ${receita.prescritor_numero}/${receita.prescritor_uf}, paciente ${receita.paciente_nome}` : `${controlados.length} medicamento(s) controlado(s): a receita será pedida ao concluir`}</span>
+          <button className="font-medium text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => setPedirReceita('editar')}>{receita ? 'Alterar' : 'Informar agora'}</button>
+        </div>
+      )}
       {pagamentos.length > 0 && (
         <ul className="mt-4 divide-y divide-papel-200 rounded-xl border border-papel-200 dark:divide-noite-700 dark:border-noite-700">
           {pagamentos.map((p, i) => (
             <li key={i} className="flex items-center justify-between px-4 py-2.5">
               <span>{nomeForma(p.forma)}{p.parcelas > 1 ? ` em ${p.parcelas}× de ${dinheiro(p.valor / p.parcelas)}` : ''}</span>
               <span className="flex items-center gap-3">
+                {p.forma === 'pix' && cfg?.pix && <button className="text-sm font-medium text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => mostrarPix(p.valor)}>QR Code</button>}
                 <strong className="num">{dinheiro(p.valor)}</strong>
                 <button className="rounded p-1 text-tinta-400 hover:text-rubro-600" onClick={() => setPagamentos((x) => x.filter((_, j) => j !== i))} aria-label="Remover pagamento"><Icone nome="fechar" className="h-4 w-4" /></button>
               </span>
@@ -552,7 +603,26 @@ function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
         <Campo rotulo="CPF ou CNPJ na nota (opcional)"><input className="campo num" inputMode="numeric" value={cpf} onChange={(e) => setCpf(e.target.value)} /></Campo>
       </div>
     </TelaSuspensa>
-  )
+    {pedirReceita && (
+      <JanelaReceita controlados={controlados} cliente={cliente} ufPadrao={cfg?.uf} inicial={receita ? { ...receita } : null}
+        onFechar={() => setPedirReceita(false)}
+        onConfirmar={(r) => { const concluir = pedirReceita === 'concluir'; setReceita(r); setPedirReceita(false); if (concluir) finalizar(r) }} />
+    )}
+    {qrPix && (
+      <TelaSuspensa aberta titulo="PIX" subtitulo={`Cobrança de ${dinheiro(qrPix.valor)}`} onFechar={() => setQrPix(null)}
+        rodape={<>
+          <Botao variante="secundario" onClick={() => { setPagamentos((p) => { const k = p.map((x) => x.forma).lastIndexOf('pix'); return k < 0 ? p : p.filter((_, i) => i !== k) }); setQrPix(null) }}>Não recebido, remover</Botao>
+          <Botao variante="sucesso" icone="ok" onClick={() => setQrPix(null)}>PIX recebido</Botao>
+        </>}>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <img src={qrPix.imagem} alt="QR Code PIX" className="h-64 w-64 rounded-lg bg-white p-2" />
+          <p className="num text-3xl font-semibold">{dinheiro(qrPix.valor)}</p>
+          <p className="text-sm text-tinta-400">Recebedor: {cfg.pix.nome}. Confira no aplicativo do banco se o valor caiu antes de confirmar.</p>
+          <button type="button" className="text-sm font-medium text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => navigator.clipboard?.writeText(qrPix.payload).then(() => avisar('Código PIX copiado.'))}>Copiar código "copia e cola"</button>
+        </div>
+      </TelaSuspensa>
+    )}
+  </>)
 }
 
 function SalvarPreVenda({ itens, cliente, onFechar, onSalvo }) {
