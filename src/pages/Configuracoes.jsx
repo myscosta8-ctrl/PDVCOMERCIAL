@@ -5,6 +5,7 @@ import { normalizarChave } from '../lib/pix.js'
 import { configImpressao, htmlTeste, imprimirHtml } from '../lib/impressao.js'
 import { dataHora, lerNumero } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Lista, Confirmacao, Icone, useAviso } from '../components/ui.jsx'
+import { JanelaAliquotasUF } from '../components/AliquotasUF.jsx'
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map((u) => ({ valor: u, texto: u }))
 const REGIMES = [
@@ -40,6 +41,7 @@ export default function Configuracoes() {
   const [salvando, setSalvando] = useState('')
   const [teste, setTeste] = useState(null)
   const [confirmarProducao, setConfirmarProducao] = useState(false)
+  const [verAliquotas, setVerAliquotas] = useState(false)
 
   const carregar = async () => {
     const [{ data }, { data: c }] = await Promise.all([
@@ -175,10 +177,20 @@ export default function Configuracoes() {
               <Campo key={c} rotulo={r}><input className="campo" value={emp.resp_tecnico?.[c] ?? ''} onChange={(e) => setEmp((x) => ({ ...x, resp_tecnico: { ...(x.resp_tecnico || {}), [c]: e.target.value } }))} /></Campo>
             ))}
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-papel-200 p-3 sm:col-span-4 dark:border-noite-700">
+            <p className="text-sm text-tinta-400">
+              {['normal', 'simples_excesso'].includes(emp.regime_tributario)
+                ? `DIFAL na NF-e para consumidor final de outro estado: ${Object.keys(emp.aliquotas_uf || {}).length ? `${Object.keys(emp.aliquotas_uf).length} UF ajustada(s)` : 'tabela padrão de novembro de 2026'}.`
+                : 'DIFAL: no Simples Nacional e no MEI a NF-e para consumidor final de outro estado sai sem o DIFAL.'}
+            </p>
+            {['normal', 'simples_excesso'].includes(emp.regime_tributario) && <Botao variante="secundario" onClick={() => setVerAliquotas(true)}>ICMS por UF (DIFAL)</Botao>}
+          </div>
           <label className="flex items-start gap-2 sm:col-span-4"><input type="checkbox" className="mt-1 h-4 w-4 accent-caixa-600" checked={emp.nfce_contingencia !== false} onChange={(e) => setEmp((x) => ({ ...x, nfce_contingencia: e.target.checked }))} />
             <span>Emitir em contingência quando a SEFAZ não responder<span className="block text-sm text-tinta-400">A venda não para: sai o DANFE em duas vias e a nota é transmitida sozinha quando a conexão voltar (prazo de 24 horas).</span></span></label>
         </div>
         <div className="flex justify-end"><Botao onClick={salvarEmpresa} carregando={salvando === 'empresa'}>Salvar dados</Botao></div>
+        <JanelaAliquotasUF aberta={verAliquotas} empresa={emp} onFechar={() => setVerAliquotas(false)}
+          onSalvo={(a) => { setEmp((x) => ({ ...x, aliquotas_uf: a })); setVerAliquotas(false) }} />
       </section>
 
       <section className="cartao space-y-4 p-5">

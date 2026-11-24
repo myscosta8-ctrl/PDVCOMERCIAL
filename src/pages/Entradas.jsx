@@ -7,6 +7,7 @@ import { precoSugerido } from '../lib/carrinho.js'
 import { Botao, Cabecalho, Etiqueta, Icone, Indicador, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { BuscaProduto } from '../components/BuscaProduto.jsx'
 import { JanelaEtiquetas } from '../components/Etiquetas.jsx'
+import { JanelaNotasRecebidas } from '../components/NotasRecebidas.jsx'
 
 const dataBR = (d) => (d ? new Date(d.length === 10 ? `${d}T12:00:00` : d).toLocaleDateString('pt-BR') : '')
 const arred = (v, c = 2) => Math.round(v * 10 ** c) / 10 ** c
@@ -20,6 +21,7 @@ export default function Entradas() {
   const [lista, setLista] = useState(null)
   const [importacao, setImportacao] = useState(null)
   const [detalhe, setDetalhe] = useState(null)
+  const [verSefaz, setVerSefaz] = useState(false)
 
   const carregar = async () => {
     const { data, error } = await supabase.from('notas_entrada')
@@ -42,6 +44,15 @@ export default function Entradas() {
     }
   }
 
+  const lancarDaSefaz = async (xml) => {
+    try {
+      setImportacao(await prepararImportacao(lerXmlNfe(xml)))
+      setVerSefaz(false)
+    } catch (err) {
+      avisar(err.message || 'Não foi possível ler a nota.', 'erro')
+    }
+  }
+
   const abrirDetalhe = async (n) => {
     const { data } = await supabase.from('notas_entrada_itens').select('*, produto:produtos(descricao, unidade), lote:lotes(numero, validade)').eq('nota_id', n.id)
     setDetalhe({ ...n, linhas: data ?? [] })
@@ -61,6 +72,7 @@ export default function Entradas() {
       <Cabecalho titulo="Entrada de mercadorias" descricao="Lançamento das notas de compra pelo arquivo XML da NF-e">
         {gestor && <>
           <input ref={arquivo} type="file" accept=".xml,text/xml" className="hidden" onChange={lerArquivo} />
+          <Botao variante="secundario" icone="busca" onClick={() => setVerSefaz(true)}>Notas na SEFAZ</Botao>
           <Botao icone="nota" onClick={() => arquivo.current?.click()}>Importar XML da nota</Botao>
         </>}
       </Cabecalho>
@@ -130,6 +142,7 @@ export default function Entradas() {
           </div>
         )}
       </TelaSuspensa>
+      {gestor && <JanelaNotasRecebidas aberta={verSefaz} onFechar={() => setVerSefaz(false)} onLancar={lancarDaSefaz} />}
     </div>
   )
 }

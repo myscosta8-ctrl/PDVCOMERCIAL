@@ -5,12 +5,17 @@
 //   { acao: "transmitir" }                         — envia as notas em contingência e confere as pendentes
 //   { acao: "cancelar", venda_id, justificativa }   — cancela a NFC-e na SEFAZ e depois a venda
 //   { acao: "inutilizar", serie, inicio, fim, justificativa, modelo? }
+//   Notas contra o CNPJ: { acao: "dfe_buscar" } | { acao: "dfe_baixar", chave } | { acao: "dfe_manifestar", chave, tipo, justificativa? }
 //   NF-e modelo 55: { acao: "nfe_emitir" | "nfe_consultar", nfe_id } | { acao: "nfe_cancelar", nfe_id, justificativa } | { acao: "nfe_cce", nfe_id, correcao }
 import { createClient } from "@supabase/supabase-js";
 import { montarInfNFe, montarQrCode, montarInfNFeSupl, ratearDesconto, NS_NFE, UF_CODIGO, type ItemNota } from "./xml.ts";
 import { montarInfNFe55, type Destinatario } from "./nfe55.ts";
 import { lerPfx, assinar, assinarTexto, type Certificado } from "./assinatura.ts";
-import { enviar, statusServico, valor, bloco } from "./sefaz.ts";
+import { enviar, enviarAN, statusServico, valor, bloco } from "./sefaz.ts";
+import {
+  pedidoDistribuicao, pedidoPorChave, lerDistribuicao, interpretar, montarManifestacao, MANIFESTACOES, type TipoManifestacao,
+  type DocumentoDistribuido, DIST_COM_DOCUMENTOS, DIST_SEM_DOCUMENTOS, DIST_CONSUMO_INDEVIDO, EVENTO_DUPLICADO,
+} from "./dfe.ts";
 import {
   montarCancelamento, montarCartaCorrecao, envelopeEvento, montarInutilizacao, envelopeInutilizacao, consultaProtocolo,
   parametrosQrV3Offline, montarQrCodeV3Offline, validarJustificativa,
@@ -492,7 +497,7 @@ async function emitirNfe(usuario: Usuario, id: string) {
       destinatario: d.destinatario as Destinatario, itens,
       frete: { modalidade: Number(d.frete?.modalidade ?? 9) as 0 | 1 | 2 | 9, volumes: d.frete?.volumes ?? null },
       pagamentos: (d.pagamentos ?? []).map((p: Record<string, unknown>) => ({ forma: String(p.forma), valor: Number(p.valor) })),
-      referencias: d.referencias ?? [], informacoes: d.informacoes, respTecnico: empresa.resp_tecnico,
+      referencias: d.referencias ?? [], informacoes: d.informacoes, respTecnico: empresa.resp_tecnico, aliquotasUF: empresa.aliquotas_uf,
     });
   } catch (e) {
     throw new ErroUsuario((e as Error).message);
@@ -596,6 +601,111 @@ async function cartaCorrecao(usuario: Usuario, id: string, correcao: string) {
   return { sequencia, protocolo: r.protocolo };
 }
 
+// ------------------------------------------------------------------ Notas emitidas contra o CNPJ (Ambiente Nacional)
+async function falarAN(servicoAN: Parameters<typeof enviarAN>[0], empresa: { nfce_ambiente: number }, corpo: string, cert: Certificado) {
+  try {
+    return await enviarAN(servicoAN, Number(empresa.nfce_ambiente) as 1 | 2, corpo, cert);
+  } catch (e) {
+    console.error(e);
+    throw new ErroUsuario("Sem comunicação com o Ambiente Nacional da NF-e. Tente de novo em alguns minutos.");
+  }
+}
+
+async function gravarDocumentos(empresaId: string, docs: DocumentoDistribuido[]) {
+  let novas = 0;
+  for (const doc of docs) {
+    let r: ReturnType<typeof interpretar>;
+    try { r = interpretar(doc); } catch { continue; }
+    if (r.nota?.chave) {
+      const { data: atual } = await servico.from("nfe_recebidas").select("id, resumo").eq("empresa_id", empresaId).eq("chave", r.nota.chave).maybeSingle();
+      if (!atual) {
+        await servico.from("nfe_recebidas").insert({ empresa_id: empresaId, nsu: doc.nsu, ...r.nota });
+        novas++;
+      } else if (atual.resumo && !r.nota.resumo) {
+        await servico.from("nfe_recebidas").update({ xml: r.nota.xml, resumo: false, protocolo: r.nota.protocolo }).eq("id", atual.id);
+      }
+    } else if (r.evento?.chave && r.evento.tpEvento === "110111") {
+      // O emitente cancelou a nota
+      await servico.from("nfe_recebidas").update({ situacao: 3 }).eq("empresa_id", empresaId).eq("chave", r.evento.chave);
+    }
+  }
+  return novas;
+}
+
+const UMA_HORA = 3600 * 1000;
+const horaBrasilia = (d: Date) => new Date(d.getTime() - 3 * UMA_HORA).toISOString().slice(11, 16);
+
+async function buscarDfe(usuario: Usuario) {
+  if (!GESTORES.includes(usuario.papel)) throw new ErroUsuario("Busca de notas exige gerente ou administrador.");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  if (empresa.dfe_liberado_em && new Date(empresa.dfe_liberado_em).getTime() > Date.now()) {
+    throw new ErroUsuario(`Já está tudo em dia. A SEFAZ só aceita nova busca a partir das ${horaBrasilia(new Date(empresa.dfe_liberado_em))}.`);
+  }
+  const { cert } = await carregarCertificado(empresa, false);
+  const ambiente = Number(empresa.nfce_ambiente) as 1 | 2;
+  let ult = String(empresa.dfe_ult_nsu || "0").padStart(15, "0"), max = ult, novas = 0;
+  let liberado: Date | null = null, aviso: string | null = null;
+  for (let chamada = 0; chamada < 10; chamada++) {
+    const ret = lerDistribuicao(await falarAN("distribuicao", empresa, pedidoDistribuicao(ambiente, UF_CODIGO[empresa.uf], empresa.cnpj, ult), cert));
+    if (ret.cStat === DIST_CONSUMO_INDEVIDO) {
+      liberado = new Date(Date.now() + UMA_HORA);
+      aviso = "A SEFAZ pediu uma pausa de uma hora entre as buscas.";
+      break;
+    }
+    if (ret.cStat !== DIST_COM_DOCUMENTOS && ret.cStat !== DIST_SEM_DOCUMENTOS) throw new ErroUsuario(`Busca recusada pela SEFAZ (${ret.cStat}): ${ret.motivo}`);
+    novas += await gravarDocumentos(usuario.empresa_id, ret.docs);
+    if (ret.ultNSU > ult) ult = ret.ultNSU;
+    if (ret.maxNSU > max) max = ret.maxNSU;
+    await servico.from("empresas").update({ dfe_ult_nsu: ult, dfe_max_nsu: max }).eq("id", empresa.id);
+    // Em dia: a SEFAZ exige uma hora de intervalo antes da próxima busca
+    if (ret.cStat === DIST_SEM_DOCUMENTOS || ult >= max) { liberado = new Date(Date.now() + UMA_HORA); break; }
+  }
+  await servico.from("empresas").update({
+    dfe_consultado_em: new Date().toISOString(), dfe_liberado_em: liberado?.toISOString() ?? null,
+  }).eq("id", empresa.id);
+  return { novas, ult_nsu: ult, max_nsu: max, liberado_em: liberado?.toISOString() ?? null, pendente: ult < max, aviso };
+}
+
+async function baixarDfe(usuario: Usuario, chave: string) {
+  if (!GESTORES.includes(usuario.papel)) throw new ErroUsuario("Exige gerente ou administrador.");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  const ret = lerDistribuicao(await falarAN("distribuicao", empresa,
+    pedidoPorChave(Number(empresa.nfce_ambiente) as 1 | 2, UF_CODIGO[empresa.uf], empresa.cnpj, chave), cert));
+  if (ret.cStat === DIST_CONSUMO_INDEVIDO) throw new ErroUsuario("A SEFAZ pediu uma pausa de uma hora. Tente baixar mais tarde.");
+  if (ret.cStat !== DIST_COM_DOCUMENTOS) throw new ErroUsuario(`XML ainda não disponível (${ret.cStat}: ${ret.motivo}). Registre a ciência da operação e tente de novo em alguns minutos.`);
+  await gravarDocumentos(usuario.empresa_id, ret.docs);
+  const { data } = await servico.from("nfe_recebidas").select("*").eq("empresa_id", usuario.empresa_id).eq("chave", chave).maybeSingle();
+  if (!data?.xml) throw new ErroUsuario("A SEFAZ devolveu só o resumo. Registre a ciência da operação e tente de novo em alguns minutos.");
+  return data;
+}
+
+async function manifestar(usuario: Usuario, chave: string, tipo: TipoManifestacao, justificativa?: string) {
+  if (!GESTORES.includes(usuario.papel)) throw new ErroUsuario("Manifestação exige gerente ou administrador.");
+  if (!MANIFESTACOES[tipo]) throw new ErroUsuario("Tipo de manifestação inválido.");
+  const { data: nota } = await servico.from("nfe_recebidas").select("*").eq("empresa_id", usuario.empresa_id).eq("chave", chave).maybeSingle();
+  if (!nota) throw new ErroUsuario("Nota não encontrada. Busque as notas na SEFAZ primeiro.");
+  if (nota.manifestacao && nota.manifestacao !== "ciencia") throw new ErroUsuario("Esta nota já tem manifestação conclusiva.");
+  if (tipo === "ciencia" && nota.manifestacao === "ciencia") return nota;
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  let infEvento: string, id: string;
+  try {
+    ({ infEvento, id } = montarManifestacao({ chave, cnpj: empresa.cnpj, ambiente: Number(empresa.nfce_ambiente) as 1 | 2, tipo, justificativa, quando: new Date() }));
+  } catch (e) {
+    throw new ErroUsuario((e as Error).message);
+  }
+  const { lote: loteEvento } = envelopeEvento(infEvento, assinar(infEvento, "infEvento", id, cert));
+  const retorno = await falarAN("evento", empresa, loteEvento, cert);
+  const ret = bloco(retorno, "retEvento");
+  const cStat = String(valor(ret ?? retorno, "cStat"));
+  if (!EVENTO_OK.has(cStat) && cStat !== EVENTO_DUPLICADO) throw new ErroUsuario(`Manifestação recusada pela SEFAZ (${cStat}): ${valor(ret ?? retorno, "xMotivo")}`);
+  const { data: atualizada } = await servico.from("nfe_recebidas").update({
+    manifestacao: tipo, manifestada_em: new Date().toISOString(), protocolo_manifestacao: ret ? valor(ret, "nProt") : null,
+  }).eq("id", nota.id).select("*").single();
+  return atualizada;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -625,6 +735,9 @@ Deno.serve(async (req) => {
       return resposta(semXml);
     }
     if (corpo.acao === "nfe_cancelar") return resposta(await cancelarNfe(usuario, corpo.nfe_id, corpo.justificativa));
+    if (corpo.acao === "dfe_buscar") return resposta(await buscarDfe(usuario));
+    if (corpo.acao === "dfe_baixar") return resposta(await baixarDfe(usuario, String(corpo.chave ?? "")));
+    if (corpo.acao === "dfe_manifestar") return resposta(await manifestar(usuario, String(corpo.chave ?? ""), corpo.tipo, corpo.justificativa));
     if (corpo.acao === "nfe_cce") return resposta(await cartaCorrecao(usuario, corpo.nfe_id, corpo.correcao));
     throw new ErroUsuario("Ação desconhecida.");
   } catch (e) {

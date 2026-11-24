@@ -150,7 +150,9 @@ export function montarInfNFe(d: DadosNota) {
 
 // Itens (det) com ICMS, PIS e COFINS; usado pela NFC-e (65) e pela NF-e (55).
 // textoPrimeiro: na NFC-e de homologação, a descrição do 1º item é substituída pelo texto obrigatório.
-export function montarItens(itens: ItemNota[], crt: number, textoPrimeiro: string | null = null) {
+// extra: grupos opcionais no fim de <imposto> (ex.: ICMSUFDest do DIFAL), recebe o item e a base (valor - desconto + frete)
+export function montarItens(itens: ItemNota[], crt: number, textoPrimeiro: string | null = null,
+  extra?: (it: ItemNota, base: number, i: number) => string) {
   const e = { crt };
   let vProd = 0, vDesc = 0, vBCTot = 0, vICMSTot = 0, vPISTot = 0, vCOFINSTot = 0, vFreteTot = 0;
   const dets = itens.map((it, i) => {
@@ -213,8 +215,8 @@ export function montarItens(itens: ItemNota[], crt: number, textoPrimeiro: strin
     };
     const pis = contrib("PIS", it.cst_pis, it.aliquota_pis);
     const cofins = contrib("COFINS", it.cst_cofins, it.aliquota_cofins);
-    return `<det nItem="${i + 1}">` + tag("prod", prod) + tag("imposto", tag("ICMS", icms) + pis + cofins) + `</det>` +
-      "";
+    const adicional = extra ? extra(it, arred(bruto - it.desconto + frete), i) : "";
+    return `<det nItem="${i + 1}">` + tag("prod", prod) + tag("imposto", tag("ICMS", icms) + pis + cofins + adicional) + `</det>`;
   }).join("");
   return { dets, vProd: arred(vProd), vDesc: arred(vDesc), vFrete: arred(vFreteTot), vBCTot, vICMSTot, vPISTot, vCOFINSTot };
 }

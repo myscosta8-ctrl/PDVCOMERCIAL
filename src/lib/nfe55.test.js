@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { montarInfNFe55, cfopPorDestino } from '../../supabase/functions/nfce/nfe55.ts'
+import { montarInfNFe55, cfopPorDestino, aliquotaInterestadual, calcularDifal } from '../../supabase/functions/nfce/nfe55.ts'
 import { montarCartaCorrecao, montarInutilizacao, CONDICAO_USO_CCE } from '../../supabase/functions/nfce/eventos.ts'
 import { digitoChave } from '../../supabase/functions/nfce/xml.ts'
 
@@ -37,12 +37,36 @@ describe('NF-e modelo 55', () => {
     expect(valor(infNFe.slice(infNFe.indexOf('<ICMSTot>')), 'vNF')).toBe('74.00')
     expect(infNFe).not.toContain('infNFeSupl')
   })
-  it('para outro estado vira 6xxx e recusa consumidor final não contribuinte (DIFAL)', () => {
+  it('para outro estado vira 6xxx', () => {
     const fora = dest({ endereco: { ...dest().endereco, uf: 'AM', municipio: 'Manaus', municipio_ibge: '1302603' } })
     const { infNFe } = montarInfNFe55(nota({ destinatario: fora }))
     expect(infNFe).toContain('<idDest>2</idDest>')
     expect(infNFe).toContain('<CFOP>6102</CFOP>')
-    expect(() => montarInfNFe55(nota({ destinatario: { ...fora, indIEDest: 9, ie: null }, consumidorFinal: true }))).toThrow(/DIFAL/)
+  })
+  it('DIFAL: regime normal informa ICMSUFDest; Simples Nacional não', () => {
+    const fora = dest({ indIEDest: 9, ie: null, documento: '529.982.247-25', endereco: { ...dest().endereco, uf: 'AM', municipio: 'Manaus', municipio_ibge: '1302603' } })
+    const normal = (extra = {}) => nota({ destinatario: fora, consumidorFinal: true,
+      emitente: { ...nota().emitente, crt: 3 }, itens: [{ ...nota().itens[0], cst_icms: '00', aliquota_icms: 19 }], ...extra })
+    const { infNFe, vICMSUFDest } = montarInfNFe55(normal())
+    expect(infNFe).toContain('<CST>00</CST><modBC>3</modBC><vBC>74.00</vBC><pICMS>12.0000</pICMS><vICMS>8.88</vICMS>')
+    expect(infNFe).toContain('<ICMSUFDest><vBCUFDest>74.00</vBCUFDest><pICMSUFDest>20.0000</pICMSUFDest><pICMSInter>12.00</pICMSInter><pICMSInterPart>100.0000</pICMSInterPart><vICMSUFDest>5.92</vICMSUFDest><vICMSUFRemet>0.00</vICMSUFRemet></ICMSUFDest></imposto>')
+    expect(infNFe).toContain('<vICMSDeson>0.00</vICMSDeson><vFCPUFDest>0.00</vFCPUFDest><vICMSUFDest>5.92</vICMSUFDest><vICMSUFRemet>0.00</vICMSUFRemet><vFCP>')
+    expect(infNFe).toContain('DIFAL (EC 87/2015) devido a AM: ICMS R$ 5,92.')
+    expect(vICMSUFDest).toBe(5.92)
+    const dupla = montarInfNFe55(normal({ aliquotasUF: { AM: { fcp: 2, base_dupla: true } } }))
+    expect(dupla.infNFe).toContain('<vBCUFDest>83.49</vBCUFDest><vBCFCPUFDest>83.49</vBCFCPUFDest><pFCPUFDest>2.0000</pFCPUFDest>')
+    expect(dupla.vICMSUFDest).toBe(7.82)
+    expect(dupla.vFCPUFDest).toBe(1.67)
+    const simples = montarInfNFe55(nota({ destinatario: fora, consumidorFinal: true }))
+    expect(simples.infNFe).not.toContain('ICMSUFDest')
+  })
+  it('alíquota interestadual e cálculo do DIFAL', () => {
+    expect(aliquotaInterestadual('SP', 'PA', 0)).toBe(7)
+    expect(aliquotaInterestadual('SP', 'RJ', 0)).toBe(12)
+    expect(aliquotaInterestadual('SP', 'ES', 0)).toBe(7)
+    expect(aliquotaInterestadual('PA', 'SP', 0)).toBe(12)
+    expect(aliquotaInterestadual('PA', 'SP', 1)).toBe(4)
+    expect(calcularDifal(1000, 7, { interna: 23, fcp: 0, base_dupla: false }).vICMSUFDest).toBe(160)
   })
   it('devolução referencia a nota de compra e vai sem pagamento', () => {
     const ref = '15261199888777000166550010000077771000077771'

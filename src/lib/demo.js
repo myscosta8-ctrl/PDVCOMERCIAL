@@ -8,7 +8,7 @@ const EMP = {
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
   pix_chave: '12345678000195', pix_nome: 'Farma Familia', pix_cidade: 'Breves', balanca: { ativo: true, digitos_codigo: 5, tipo: 'preco' },
-  nfe_serie: 1, impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
+  nfe_serie: 1, aliquotas_uf: {}, dfe_consultado_em: '2026-11-24T13:02:00Z', dfe_liberado_em: null, dfe_ult_nsu: '000000000000231', impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
   contador: { nome: 'Escritório Contábil Exemplo', cpf: '12345678909', crc: 'PA-012345/O' }, sped_perfil: 'A', cod_receita_icms: null,
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
 }
@@ -228,6 +228,12 @@ const TABELAS = {
     { id: 'nd2', venda_id: 'v8', numero: 313, serie: 1, status: 'contingencia', ambiente: 2, dh_contingencia: h(17, 5), criado_em: h(17, 5), motivo: 'Emitida em contingência; será transmitida quando a SEFAZ responder.', venda: { numero: 1049, total: 42.5 } },
     { id: 'nd3', venda_id: 'v4', numero: 307, serie: 1, status: 'cancelada', ambiente: 2, cancelada_em: h(14, 20), protocolo_cancelamento: '315260000098765', justificativa_cancelamento: 'Cliente desistiu da compra no caixa', venda: { numero: 1045, total: 18.4 } },
     { id: 'nd4', venda_id: 'v6', numero: 311, serie: 1, status: 'rejeitada', ambiente: 2, codigo_status: '778', motivo: 'Rejeição: Informado NCM inexistente' },
+  ],
+  nfe_recebidas: [
+    { id: 'r1', chave: '15261111222333000144550010000891121000067890', cnpj_emitente: '11222333000144', nome_emitente: 'Distribuidora Norte Farma Ltda', emissao: '2026-11-24T08:40:00-03:00', valor: 2310.75, situacao: 1, protocolo: '315260000201111', resumo: true, manifestacao: null },
+    { id: 'r2', chave: '15261199888777000166550020000056021000011223', cnpj_emitente: '99888777000166', nome_emitente: 'Higiene e Cia Comércio Ltda', emissao: '2026-11-22T16:10:00-03:00', valor: 744.9, situacao: 1, protocolo: '315260000200987', resumo: false, manifestacao: 'ciencia', manifestada_em: '2026-11-23T10:00:00Z' },
+    { id: 'r3', chave: '15261111222333000144550010000884121000012345', cnpj_emitente: '11222333000144', nome_emitente: 'Distribuidora Norte Farma Ltda', emissao: '2026-11-21T09:00:00-03:00', valor: 1842.6, situacao: 1, protocolo: '315260000199870', resumo: false, manifestacao: 'confirmada', manifestada_em: '2026-11-21T14:00:00Z' },
+    { id: 'r4', chave: '13261144555666000177550010000012341000099887', cnpj_emitente: '44555666000177', nome_emitente: 'Atacado Amazonas Medicamentos Ltda', emissao: '2026-11-18T11:30:00-04:00', valor: 512.3, situacao: 3, protocolo: '313260000045678', resumo: true, manifestacao: null },
   ],
   nfe_documentos: [
     { id: 'ne1', numero: 15, serie: 1, status: 'autorizada', natureza: 'Venda de mercadoria', finalidade: 1, ambiente: 2, valor_total: 486.5, emitida_em: h(10, 20), criado_em: h(10, 15),

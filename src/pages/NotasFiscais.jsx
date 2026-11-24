@@ -335,7 +335,7 @@ function FormNfe({ form, setForm, empresa, onFeito }) {
             <Campo rotulo="UF"><Lista valor={dest.endereco.uf || null} opcoes={UFS} onMudar={me('uf')} /></Campo>
             <Campo rotulo="Código IBGE"><div className="flex gap-1.5"><input className="campo num min-w-0" value={dest.endereco.municipio_ibge} onChange={me('municipio_ibge')} /><Botao variante="secundario" className="px-3" onClick={buscarIbge} title="Buscar o código pelo nome do município">Buscar</Botao></div></Campo>
           </div>
-          {dest.endereco.uf && empresa?.uf && dest.endereco.uf !== empresa.uf && <p className="mt-2 text-sm text-tinta-400">Operação para outro estado: os CFOP passam a 6xxx na emissão.{form.consumidor_final && Number(dest.indIEDest) === 9 ? ' Venda a consumidor final de outro estado exige DIFAL, ainda não disponível.' : ''}</p>}
+          {dest.endereco.uf && empresa?.uf && dest.endereco.uf !== empresa.uf && <p className="mt-2 text-sm text-tinta-400">Operação para outro estado: os CFOP passam a 6xxx na emissão.{form.consumidor_final && Number(dest.indIEDest) === 9 ? (['normal', 'simples_excesso'].includes(empresa.regime_tributario) ? ' Consumidor final não contribuinte: o DIFAL é calculado na emissão; recolha a GNRE para o estado de destino antes da saída da mercadoria.' : ' No Simples Nacional e no MEI esta operação sai sem DIFAL.') : ''}</p>}
         </section>
 
         <section>

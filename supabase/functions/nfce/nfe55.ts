@@ -2,7 +2,7 @@
 // Reaproveita a montagem dos itens da NFC-e; gerada já na forma canônica.
 import {
   UF_CODIGO, TEXTO_HOMOLOGACAO_NFE, T_PAG, type Emitente, type ItemNota,
-  txt, so, n2, tag, arred, digitoChave, dataHoraBrasilia, montarItens,
+  txt, so, n2, n4, tag, arred, digitoChave, dataHoraBrasilia, montarItens,
 } from "./xml.ts";
 
 export interface Destinatario {
@@ -27,6 +27,36 @@ export interface DadosNFe {
   referencias?: string[];       // chaves de NF-e referenciadas (devolução)
   informacoes?: string | null;
   respTecnico?: { cnpj: string; contato: string; email: string; fone: string } | null;
+  aliquotasUF?: Record<string, Partial<AliquotaUF>> | null;   // ajustes da empresa sobre a tabela padrão (DIFAL)
+}
+
+// ---------------------------------------------------------------- DIFAL (EC 87/2015, LC 190/2022)
+export interface AliquotaUF { interna: number; fcp: number; base_dupla: boolean }
+
+// Alíquota interna geral (modal) de cada UF em novembro/2026. O FCP só incide sobre produtos listados
+// em lei estadual: fica zerado, exceto no RJ (adicional geral de 2%). A empresa ajusta na configuração.
+export const ALIQUOTAS_UF_PADRAO: Record<string, AliquotaUF> = Object.fromEntries(Object.entries({
+  AC: 19, AL: 20.5, AM: 20, AP: 18, BA: 20.5, CE: 20, DF: 20, ES: 17, GO: 19, MA: 23, MG: 18, MS: 17, MT: 17, PA: 19,
+  PB: 20, PE: 20.5, PI: 22.5, PR: 19.5, RJ: 20, RN: 20, RO: 19.5, RR: 20, RS: 17, SC: 17, SE: 19, SP: 18, TO: 20,
+}).map(([uf, interna]) => [uf, { interna, fcp: uf === "RJ" ? 2 : 0, base_dupla: false }]));
+
+const SUL_SUDESTE_SEM_ES = new Set(["PR", "SC", "RS", "SP", "RJ", "MG"]);
+
+// 4% para importados (origem 1, 2, 3 ou 8); 7% de Sul/Sudeste (exceto ES) para N, NE, CO e ES; 12% nos demais casos
+export function aliquotaInterestadual(ufOrigem: string, ufDestino: string, origemMercadoria: number) {
+  if ([1, 2, 3, 8].includes(Number(origemMercadoria))) return 4;
+  if (SUL_SUDESTE_SEM_ES.has(ufOrigem) && !SUL_SUDESTE_SEM_ES.has(ufDestino)) return 7;
+  return 12;
+}
+
+// Base única: diferença de alíquotas sobre o valor da operação.
+// Base dupla: o valor sem o ICMS de origem é "por dentro" da alíquota do destino (interna + FCP).
+export function calcularDifal(base: number, pInter: number, uf: AliquotaUF) {
+  const icmsOrigem = arred(base * pInter / 100);
+  const vBC = uf.base_dupla ? arred((base - icmsOrigem) / (1 - (uf.interna + uf.fcp) / 100)) : base;
+  const vICMSUFDest = Math.max(0, arred(vBC * uf.interna / 100 - (uf.base_dupla ? icmsOrigem : vBC * pInter / 100)));
+  const vFCPUFDest = arred(vBC * uf.fcp / 100);
+  return { vBC, vICMSUFDest, vFCPUFDest };
 }
 
 export function montarChave55(d: Pick<DadosNFe, "emitente" | "emissao" | "serie" | "numero" | "codigo_numerico">) {
@@ -59,9 +89,13 @@ export function montarInfNFe55(d: DadosNFe) {
   if (so(dest.endereco.municipio_ibge).length !== 7) throw new Error("Informe o código IBGE do município do destinatário (7 dígitos).");
   if (![11, 14].includes(so(dest.documento).length)) throw new Error("CPF ou CNPJ do destinatário inválido.");
   if (dest.indIEDest === 1 && !so(dest.ie)) throw new Error("Destinatário contribuinte precisa da inscrição estadual.");
-  if (interestadual && d.consumidorFinal && dest.indIEDest === 9 && d.finalidade === 1) {
-    throw new Error("Venda a consumidor final de outro estado exige o DIFAL, que ainda não está disponível. Emita só para contribuintes de outros estados.");
-  }
+  // DIFAL: operação interestadual com consumidor final não contribuinte. O Simples Nacional (CRT 1) e o MEI
+  // (CRT 4) não recolhem o DIFAL nessa operação e não informam o grupo ICMSUFDest.
+  const difal = interestadual && d.consumidorFinal && dest.indIEDest === 9 && [1, 4].includes(d.finalidade) && (e.crt === 2 || e.crt === 3);
+  const ufDestino: AliquotaUF | null = difal
+    ? { ...(ALIQUOTAS_UF_PADRAO[dest.endereco.uf] ?? { interna: 0, fcp: 0, base_dupla: false }), ...(d.aliquotasUF?.[dest.endereco.uf] ?? {}) } as AliquotaUF
+    : null;
+  if (ufDestino && !(ufDestino.interna > 0)) throw new Error(`Informe a alíquota interna de ICMS da UF ${dest.endereco.uf} na configuração fiscal.`);
   if (d.finalidade === 4 && !d.referencias?.length) throw new Error("Na devolução, informe a chave da nota que está sendo devolvida.");
 
   const ide =
@@ -102,12 +136,30 @@ export function montarInfNFe55(d: DadosNFe) {
     (dest.indIEDest === 1 ? tag("IE", so(dest.ie)) : "") +
     (dest.email ? tag("email", txt(dest.email, 60)) : ""));
 
-  const itens = d.itens.map((i) => ({ ...i, cfop: cfopPorDestino(i.cfop, interestadual) }));
-  const it = montarItens(itens, e.crt, null);
+  // Na saída para outro estado, o ICMS próprio (CST 00/20) usa a alíquota interestadual
+  const itens = d.itens.map((i) => ({
+    ...i, cfop: cfopPorDestino(i.cfop, interestadual),
+    aliquota_icms: interestadual && (e.crt === 2 || e.crt === 3) && ["00", "20"].includes(String(i.cst_icms))
+      ? aliquotaInterestadual(e.uf, dest.endereco.uf, i.origem) : i.aliquota_icms,
+  }));
+  let vFCPUFDest = 0, vICMSUFDest = 0;
+  const grupoDifal = (item: ItemNota, base: number) => {
+    if (!ufDestino || ["40", "41", "50"].includes(String(item.cst_icms))) return "";
+    const pInter = aliquotaInterestadual(e.uf, dest.endereco.uf, item.origem);
+    const c = calcularDifal(base, pInter, ufDestino);
+    vFCPUFDest += c.vFCPUFDest; vICMSUFDest += c.vICMSUFDest;
+    return tag("ICMSUFDest",
+      tag("vBCUFDest", n2(c.vBC)) + (ufDestino.fcp > 0 ? tag("vBCFCPUFDest", n2(c.vBC)) + tag("pFCPUFDest", n4(ufDestino.fcp)) : "") +
+      tag("pICMSUFDest", n4(ufDestino.interna)) + tag("pICMSInter", n2(pInter)) + tag("pICMSInterPart", "100.0000") +
+      (ufDestino.fcp > 0 ? tag("vFCPUFDest", n2(c.vFCPUFDest)) : "") + tag("vICMSUFDest", n2(c.vICMSUFDest)) + tag("vICMSUFRemet", "0.00"));
+  };
+  const it = montarItens(itens, e.crt, null, grupoDifal);
+  vFCPUFDest = arred(vFCPUFDest); vICMSUFDest = arred(vICMSUFDest);
   const z = "0.00";
   const vNF = arred(it.vProd - it.vDesc + it.vFrete);
+  const totaisDifal = ufDestino ? tag("vFCPUFDest", n2(vFCPUFDest)) + tag("vICMSUFDest", n2(vICMSUFDest)) + tag("vICMSUFRemet", z) : "";
   const total = tag("total", tag("ICMSTot",
-    tag("vBC", n2(arred(it.vBCTot))) + tag("vICMS", n2(arred(it.vICMSTot))) + tag("vICMSDeson", z) + tag("vFCP", z) + tag("vBCST", z) + tag("vST", z) +
+    tag("vBC", n2(arred(it.vBCTot))) + tag("vICMS", n2(arred(it.vICMSTot))) + tag("vICMSDeson", z) + totaisDifal + tag("vFCP", z) + tag("vBCST", z) + tag("vST", z) +
     tag("vFCPST", z) + tag("vFCPSTRet", z) + tag("vProd", n2(it.vProd)) + tag("vFrete", n2(it.vFrete)) + tag("vSeg", z) +
     tag("vDesc", n2(it.vDesc)) + tag("vII", z) + tag("vIPI", z) + tag("vIPIDevol", z) + tag("vPIS", n2(arred(it.vPISTot))) +
     tag("vCOFINS", n2(arred(it.vCOFINSTot))) + tag("vOutro", z) + tag("vNF", n2(vNF))));
@@ -130,7 +182,12 @@ export function montarInfNFe55(d: DadosNFe) {
       (t === "03" || t === "04" ? tag("card", tag("tpIntegra", "2")) : ""));
   }).join("") + (soma > vNF ? tag("vTroco", n2(arred(soma - vNF))) : ""));
 
-  const infAdic = d.informacoes ? tag("infAdic", tag("infCpl", txt(d.informacoes, 2000))) : "";
+  const textoDifal = ufDestino
+    ? `DIFAL (EC 87/2015) devido a ${dest.endereco.uf}: ICMS R$ ${n2(vICMSUFDest).replace(".", ",")}` +
+      (vFCPUFDest > 0 ? `; FCP R$ ${n2(vFCPUFDest).replace(".", ",")}` : "") + "."
+    : "";
+  const complemento = [d.informacoes, textoDifal].filter(Boolean).join(" ");
+  const infAdic = complemento ? tag("infAdic", tag("infCpl", txt(complemento, 2000))) : "";
   const rt = d.respTecnico && so(d.respTecnico.cnpj).length === 14
     ? tag("infRespTec", tag("CNPJ", so(d.respTecnico.cnpj)) + tag("xContato", txt(d.respTecnico.contato, 60)) +
         tag("email", txt(d.respTecnico.email, 60)) + tag("fone", so(d.respTecnico.fone)))
@@ -138,7 +195,7 @@ export function montarInfNFe55(d: DadosNFe) {
 
   const corpo = tag("ide", ide) + tag("emit", emit) + destXml + it.dets + total + transp + pag + infAdic + rt;
   const infNFe = `<infNFe Id="NFe${chave}" versao="4.00">${corpo}</infNFe>`;
-  return { chave, infNFe, vNF, vProd: it.vProd, vDesc: it.vDesc, vFrete: it.vFrete, vBC: arred(it.vBCTot), vICMS: arred(it.vICMSTot) };
+  return { chave, infNFe, vNF, vProd: it.vProd, vDesc: it.vDesc, vFrete: it.vFrete, vBC: arred(it.vBCTot), vICMS: arred(it.vICMSTot), vICMSUFDest, vFCPUFDest };
 }
 
 // Formas de pagamento além das do caixa

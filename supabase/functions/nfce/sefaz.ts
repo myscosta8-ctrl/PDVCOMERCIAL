@@ -27,16 +27,34 @@ export async function enviar(
 ): Promise<string> {
   if (!UFS_SVRS[modelo].has(uf)) throw new Error(`Emissão de ${modelo === 55 ? "NF-e" : "NFC-e"} para a UF ${uf} ainda não está disponível.`);
   const s = SERVICOS[servico];
+  return await postar(`${SVRS[modelo][ambiente]}/${s.caminho}`,
+    `<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/${s.wsdl}">${corpo}</nfeDadosMsg>`, cert);
+}
+
+// Ambiente Nacional: distribuição de documentos e eventos do destinatário (manifestação)
+const AN = {
+  distribuicao: { 1: "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx", 2: "https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx" },
+  evento: { 1: "https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx", 2: "https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx" },
+} as const;
+
+export async function enviarAN(servico: keyof typeof AN, ambiente: 1 | 2, corpo: string, cert: Certificado): Promise<string> {
+  const corpoSoap = servico === "distribuicao"
+    ? `<nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe"><nfeDadosMsg>${corpo}</nfeDadosMsg></nfeDistDFeInteresse>`
+    : `<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">${corpo}</nfeDadosMsg>`;
+  return await postar(AN[servico][ambiente], corpoSoap, cert);
+}
+
+async function postar(url: string, corpoSoap: string, cert: Certificado): Promise<string> {
   const envelope =
     `<?xml version="1.0" encoding="utf-8"?>` +
     `<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">` +
-    `<soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/${s.wsdl}">${corpo}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+    `<soap12:Body>${corpoSoap}</soap12:Body></soap12:Envelope>`;
   // deno-lint-ignore no-explicit-any
   const client = (Deno as any).createHttpClient({ cert: cert.certPem, key: cert.chavePem, caCerts: await cadeiaICP() });
   try {
     const controle = new AbortController();
     const limite = setTimeout(() => controle.abort(), 30000);
-    const resp = await fetch(`${SVRS[modelo][ambiente]}/${s.caminho}`, {
+    const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/soap+xml; charset=utf-8" },
       body: envelope,
