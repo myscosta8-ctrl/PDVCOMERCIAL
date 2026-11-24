@@ -49,9 +49,30 @@ const TABELAS = {
   ],
   vendas: VENDAS,
   venda_itens: [
-    { sequencia: 1, descricao: 'Protetor solar FPS 50, 120 ml', quantidade: 1, preco_unitario: 59.9, desconto: 0, total: 59.9 },
-    { sequencia: 2, descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', quantidade: 2, preco_unitario: 6.9, desconto: 0, total: 13.8 },
-    { sequencia: 3, descricao: 'Vitamina C 1 g efervescente, 10 comprimidos', quantidade: 1, preco_unitario: 16.9, desconto: 0.9, total: 16.0 },
+    { id: 'vi1', quantidade_devolvida: 0, sequencia: 1, descricao: 'Protetor solar FPS 50, 120 ml', quantidade: 1, preco_unitario: 59.9, desconto: 0, total: 59.9 },
+    { id: 'vi2', quantidade_devolvida: 0, sequencia: 2, descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', quantidade: 2, preco_unitario: 6.9, desconto: 0, total: 13.8 },
+    { id: 'vi3', quantidade_devolvida: 1, sequencia: 3, descricao: 'Vitamina C 1 g efervescente, 10 comprimidos', quantidade: 1, preco_unitario: 16.9, desconto: 0.9, total: 16.0 },
+  ],
+  convenios: [
+    { id: 'cv1', nome: 'Prefeitura Municipal', cnpj: '05123456000101', desconto_percentual: 5, dia_fechamento: 25, dias_vencimento: 10, ativo: true },
+    { id: 'cv2', nome: 'Sindicato dos Comerciários', cnpj: null, desconto_percentual: 0, dia_fechamento: 20, dias_vencimento: 15, ativo: true },
+  ],
+  clientes: [
+    { id: 'cl1', nome: 'Joana Martins', cpf_cnpj: '12345678909', telefone: '(91) 99876-1122', limite_credito: 500, bloqueado: false, ativo: true, convenio_id: null, convenio: null, endereco: {} },
+    { id: 'cl2', nome: 'Raimundo Pereira', cpf_cnpj: '98765432100', telefone: '(91) 98111-2233', limite_credito: 300, bloqueado: false, ativo: true, convenio_id: null, convenio: null, endereco: {} },
+    { id: 'cl3', nome: 'Luciana Farias', cpf_cnpj: '45678912300', telefone: '(91) 99222-3344', limite_credito: 0, bloqueado: false, ativo: true, convenio_id: 'cv1', convenio: { nome: 'Prefeitura Municipal' }, endereco: {} },
+    { id: 'cl4', nome: 'Pedro Santos', cpf_cnpj: null, telefone: '(91) 98333-4455', limite_credito: 200, bloqueado: true, ativo: true, convenio_id: null, convenio: null, endereco: {} },
+  ],
+  contas_receber: [
+    { id: 'cr1', cliente_id: 'cl2', origem: 'crediario', parcela: 1, parcelas: 3, valor: 60, valor_pago: 0, vencimento: '2026-11-10', status: 'aberta', cliente: { nome: 'Raimundo Pereira', telefone: '(91) 98111-2233' } },
+    { id: 'cr2', cliente_id: 'cl2', origem: 'crediario', parcela: 2, parcelas: 3, valor: 60, valor_pago: 0, vencimento: '2026-12-10', status: 'aberta', cliente: { nome: 'Raimundo Pereira', telefone: '(91) 98111-2233' } },
+    { id: 'cr3', cliente_id: 'cl1', origem: 'crediario', parcela: 1, parcelas: 2, valor: 85.5, valor_pago: 20, vencimento: '2026-11-28', status: 'aberta', cliente: { nome: 'Joana Martins', telefone: '(91) 99876-1122' } },
+    { id: 'cr4', cliente_id: 'cl3', origem: 'convenio', parcela: 1, parcelas: 1, valor: 142.3, valor_pago: 0, vencimento: '2026-12-05', status: 'aberta', cliente: { nome: 'Luciana Farias', telefone: '(91) 99222-3344' } },
+  ],
+  pre_vendas: [
+    { id: 'pv1', numero: 18, tipo: 'orcamento', cliente_nome: 'Joana Martins', itens: [{ produto_id: 'p6', descricao: 'Protetor solar FPS 50, 120 ml', quantidade: 2, preco_unitario: 59.9, desconto: 0 }, { produto_id: 'p8', descricao: 'Vitamina C 1 g efervescente, 10 comprimidos', quantidade: 1, preco_unitario: 16.9, desconto: 0 }], total: 136.7, validade: '2026-11-30', status: 'aberto', criado_em: h(10, 15), criador: { nome: 'Ana Ribeiro' } },
+    { id: 'pv2', numero: 7, tipo: 'pedido', cliente_nome: 'Clínica Bem-Estar', itens: [{ produto_id: 'p3', descricao: 'Soro fisiológico 0,9%, 500 ml', quantidade: 20, preco_unitario: 8.9, desconto: 0 }], total: 178, validade: '2026-11-26', status: 'aberto', criado_em: h(8, 40), criador: { nome: 'Carlos Lima' } },
+    { id: 'pv3', numero: 17, tipo: 'orcamento', cliente_nome: 'Raimundo Pereira', itens: [{ produto_id: 'p1', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', quantidade: 3, preco_unitario: 6.9, desconto: 0 }], total: 20.7, validade: '2026-11-20', status: 'aberto', criado_em: '2026-11-13T14:00:00Z', criador: { nome: 'Ana Ribeiro' } },
   ],
   nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
 }
@@ -71,7 +92,8 @@ const RPC = {
     nfce: { autorizadas: 4, pendentes: 1, sem_nota: 1 }, caixas_abertos: 1,
     ultimas: VENDAS.filter((v) => v.status === 'concluida').slice(0, 5),
   },
-  resumo_caixa: { abertura: 150, formas: { dinheiro: 97.7, pix: 65.8, credito: 110, debito: 26.8 }, suprimentos: 50, sangrias: 200, qtd_vendas: 5, dinheiro_esperado: 97.7 },
+  resumo_caixa: { abertura: 150, formas: { dinheiro: 97.7, pix: 65.8, credito: 110, debito: 26.8 }, recebimentos: { dinheiro: 60, pix: 40 }, devolucoes_dinheiro: 0, suprimentos: 50, sangrias: 200, qtd_vendas: 5, dinheiro_esperado: 157.7 },
+  situacao_cliente: { limite: 500, saldo_devedor: 65.5, disponivel: 434.5, em_atraso: 0, dias_atraso: 0, vale: 30, bloqueado: false, convenio: null },
   credenciais_configuradas: { certificado: true, senha: true, csc: true },
 }
 
@@ -79,7 +101,7 @@ function consulta(tabela) {
   let linhas = [...(TABELAS[tabela] ?? [])]
   let unico = false
   const q = {
-    select: () => q, order: () => q, limit: () => q, gte: () => q, lt: () => q,
+    select: () => q, order: () => q, limit: () => q, gte: () => q, lt: () => q, in: () => q, ilike: () => q,
     or: (expr) => {
       const conds = expr.split(',').map((c) => c.split('.'))
       linhas = linhas.filter((l) => conds.some(([campo, op, ...v]) => {

@@ -1,4 +1,5 @@
 import QRCode from 'qrcode'
+import { NOMES_FORMAS as FORMAS } from './formas.js'
 import { supabase } from './supabase.js'
 import { dinheiro, dataHora } from './formato.js'
 
@@ -14,7 +15,6 @@ export async function chamarNfce(corpo) {
   return { dados: data }
 }
 
-const FORMAS = { dinheiro: 'Dinheiro', pix: 'PIX', debito: 'Cartão de débito', credito: 'Cartão de crédito', crediario: 'Crediário', outro: 'Outros' }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const chaveFormatada = (c) => String(c || '').replace(/(\d{4})/g, '$1 ').trim()
 

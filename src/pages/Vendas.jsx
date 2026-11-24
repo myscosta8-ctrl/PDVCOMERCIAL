@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
+import { NOMES_FORMAS as FORMAS } from '../lib/formas.js'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { dinheiro, dataHora } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Etiqueta, Icone, Indicador, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
+import { useSessao } from '../lib/sessao.js'
+import { useCaixaAberto } from '../lib/caixa.js'
+import { lerNumero } from '../lib/formato.js'
+import { SeletorCliente } from '../components/Clientes.jsx'
 
-const FORMAS = { dinheiro: 'Dinheiro', pix: 'PIX', debito: 'Cartão de débito', credito: 'Cartão de crédito', crediario: 'Crediário', outro: 'Outros' }
 
 function situacaoNota(notas) {
   const n = notas?.find((x) => x.status === 'autorizada') ?? notas?.[0]
@@ -16,6 +20,9 @@ function situacaoNota(notas) {
 
 export default function Vendas() {
   const avisar = useAviso()
+  const perfil = useSessao()
+  const { caixa } = useCaixaAberto()
+  const [devolvendo, setDevolvendo] = useState(null)
   const hoje = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
   const [dia, setDia] = useState(hoje)
   const [lista, setLista] = useState(null)
@@ -30,7 +37,7 @@ export default function Vendas() {
     const fim = new Date(inicio.getTime() + 86400000)
     const { data, error } = await supabase
       .from('vendas')
-      .select('id, numero, subtotal, desconto, total, troco, status, criado_em, cpf_consumidor, motivo_cancelamento, operador:usuarios!vendas_operador_id_fkey(nome), pagamentos:venda_pagamentos(forma, valor), notas:nfce_documentos(numero, status)')
+      .select('id, numero, subtotal, desconto, total, troco, status, criado_em, cpf_consumidor, motivo_cancelamento, cliente_id, cliente:clientes(nome), operador:usuarios!vendas_operador_id_fkey(nome), pagamentos:venda_pagamentos(forma, valor), notas:nfce_documentos(numero, status)')
       .gte('criado_em', inicio.toISOString())
       .lt('criado_em', fim.toISOString())
       .order('numero', { ascending: false })
@@ -41,7 +48,7 @@ export default function Vendas() {
 
   const abrir = async (v) => {
     const [itens, notas] = await Promise.all([
-      supabase.from('venda_itens').select('sequencia, descricao, quantidade, preco_unitario, desconto, total').eq('venda_id', v.id).order('sequencia'),
+      supabase.from('venda_itens').select('id, sequencia, descricao, quantidade, quantidade_devolvida, preco_unitario, desconto, total').eq('venda_id', v.id).order('sequencia'),
       supabase.from('nfce_documentos').select('numero, serie, status, codigo_status, motivo, ambiente, chave').eq('venda_id', v.id).order('criado_em', { ascending: false }).limit(1),
     ])
     setDetalhe({ ...v, itens: itens.data ?? [], nfce: notas.data?.[0] ?? null })
@@ -117,13 +124,14 @@ export default function Vendas() {
       </div>
 
       <TelaSuspensa
-        aberta={!!detalhe && !cancelando}
+        aberta={!!detalhe && !cancelando && !devolvendo}
         titulo={`Venda nº ${detalhe?.numero ?? ''}`}
         subtitulo={detalhe ? `${dataHora(detalhe.criado_em)}, operador ${detalhe.operador?.nome ?? ''}` : ''}
         onFechar={() => setDetalhe(null)}
         largura="max-w-2xl"
         rodape={<>
           <Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>
+          {detalhe?.status === 'concluida' && perfil.papel !== 'operador' && detalhe.itens.some((i) => Number(i.quantidade) > Number(i.quantidade_devolvida)) && <Botao variante="secundario" onClick={() => setDevolvendo(detalhe)}>Devolução ou troca</Botao>}
           {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao variante="perigo" onClick={() => setCancelando(detalhe)}>Cancelar venda</Botao>}
           {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao icone="nota" onClick={emitir} carregando={emitindo}>{detalhe?.nfce ? 'Reenviar NFC-e' : 'Emitir NFC-e'}</Botao>}
           {detalhe?.nfce?.status === 'autorizada' && <Botao icone="impressora" onClick={() => imprimirDanfe(detalhe.id)}>Imprimir DANFE NFC-e</Botao>}
@@ -136,7 +144,7 @@ export default function Vendas() {
               <tbody>
                 {detalhe.itens.map((i) => (
                   <tr key={i.sequencia}>
-                    <td>{i.descricao}</td>
+                    <td>{i.descricao}{Number(i.quantidade_devolvida) > 0 && <span className="ml-2"><Etiqueta tom="alerta">{Number(i.quantidade_devolvida)} devolvido(s)</Etiqueta></span>}</td>
                     <td className="num text-right">{Number(i.quantidade)}</td>
                     <td className="num text-right">{dinheiro(i.preco_unitario)}</td>
                     <td className="num text-right">{dinheiro(i.total)}</td>
@@ -174,6 +182,11 @@ export default function Vendas() {
         )}
       </TelaSuspensa>
 
+      {devolvendo && (
+        <Devolucao venda={devolvendo} caixa={caixa} onFechar={() => setDevolvendo(null)}
+          onConcluir={() => { const v = devolvendo; setDevolvendo(null); abrir(v); carregar() }} />
+      )}
+
       <TelaSuspensa
         aberta={!!cancelando}
         titulo={`Cancelar venda nº ${cancelando?.numero ?? ''}`}
@@ -189,5 +202,89 @@ export default function Vendas() {
         </Campo>
       </TelaSuspensa>
     </div>
+  )
+}
+
+function Devolucao({ venda, caixa, onFechar, onConcluir }) {
+  const avisar = useAviso()
+  const [qtds, setQtds] = useState({})
+  const [destino, setDestino] = useState('vale')
+  const [cliente, setCliente] = useState(venda.cliente_id ? { id: venda.cliente_id, nome: venda.cliente?.nome } : null)
+  const [escolher, setEscolher] = useState(false)
+  const [motivo, setMotivo] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const aPrazo = venda.pagamentos.some((p) => p.forma === 'crediario' || p.forma === 'convenio')
+  const proporcao = Number(venda.subtotal) > 0 ? Number(venda.total) / Number(venda.subtotal) : 1
+  const disponivel = (i) => Number(i.quantidade) - Number(i.quantidade_devolvida)
+  const selecionados = venda.itens.map((i) => ({ i, q: lerNumero(qtds[i.id] ?? '') || 0 })).filter((x) => x.q > 0)
+  const valor = selecionados.reduce((s, { i, q }) => s + Math.round((Number(i.total) / Number(i.quantidade)) * q * proporcao * 100) / 100, 0)
+  const invalido = selecionados.some(({ i, q }) => q > disponivel(i))
+
+  const confirmar = async () => {
+    if (!selecionados.length) { avisar('Informe a quantidade devolvida de pelo menos um item.', 'erro'); return }
+    if (invalido) { avisar('Quantidade maior que a disponível para devolução.', 'erro'); return }
+    if (destino === 'vale' && !cliente) { avisar('Identifique o cliente para gerar o vale-troca.', 'erro'); return }
+    if (destino === 'dinheiro' && !caixa) { avisar('Abra o caixa para devolver em dinheiro.', 'erro'); return }
+    setEnviando(true)
+    const { data, error } = await supabase.rpc('devolver_itens', {
+      p_venda: venda.id, p_itens: selecionados.map(({ i, q }) => ({ venda_item_id: i.id, quantidade: q })),
+      p_destino: destino, p_motivo: motivo, p_caixa: caixa?.id ?? null, p_cliente: cliente?.id ?? null,
+    })
+    setEnviando(false)
+    if (error) { avisar(mensagemErro(error), 'erro'); return }
+    avisar(destino === 'vale' ? `Vale-troca de ${dinheiro(data.valor)} gerado para ${cliente.nome}.` : `Devolva ${dinheiro(data.valor)} em dinheiro ao cliente.`)
+    onConcluir()
+  }
+
+  if (escolher) return <SeletorCliente aberta titulo="Cliente do vale-troca" onFechar={() => setEscolher(false)} onEscolher={(c) => { setCliente(c); setEscolher(false) }} />
+
+  return (
+    <TelaSuspensa aberta titulo={`Devolução ou troca da venda nº ${venda.numero}`} subtitulo="Os itens devolvidos voltam ao estoque" onFechar={onFechar} largura="max-w-2xl"
+      rodape={<>
+        <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
+        <Botao onClick={confirmar} carregando={enviando} disabled={!selecionados.length || invalido || motivo.trim().length < 10}>
+          {destino === 'vale' ? `Gerar vale de ${dinheiro(valor)}` : `Devolver ${dinheiro(valor)}`}
+        </Botao>
+      </>}>
+      <div className="space-y-4">
+        <table className="tabela -mx-4 w-[calc(100%+2rem)] text-[0.95rem]">
+          <thead><tr><th>Produto</th><th className="text-right">Vendido</th><th className="text-right">Disponível</th><th className="text-right">Devolver</th></tr></thead>
+          <tbody>
+            {venda.itens.map((i) => (
+              <tr key={i.id} className={disponivel(i) <= 0 ? 'opacity-50' : ''}>
+                <td>{i.descricao}</td>
+                <td className="num text-right">{Number(i.quantidade)}</td>
+                <td className="num text-right">{disponivel(i)}</td>
+                <td className="text-right">
+                  <input className="campo num ml-auto w-20 py-1 text-right" inputMode="decimal" disabled={disponivel(i) <= 0} aria-label={`Quantidade devolvida de ${i.descricao}`}
+                    value={qtds[i.id] ?? ''} onChange={(e) => setQtds((x) => ({ ...x, [i.id]: e.target.value }))} placeholder="0" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div>
+          <span className="rotulo">Como devolver o valor</span>
+          <div className="grid grid-cols-2 gap-2">
+            {[{ id: 'vale', t: 'Vale-troca para o cliente', d: 'Crédito para usar em outra compra' }, { id: 'dinheiro', t: 'Dinheiro do caixa', d: aPrazo ? 'Indisponível para venda a prazo' : 'Sai da gaveta do caixa aberto' }].map((o) => (
+              <button key={o.id} disabled={o.id === 'dinheiro' && aPrazo} onClick={() => setDestino(o.id)} aria-pressed={destino === o.id}
+                className={`rounded-xl border px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-45 ${destino === o.id ? 'border-caixa-500 bg-caixa-50 dark:bg-caixa-700/20' : 'border-papel-300 dark:border-noite-600'}`}>
+                <span className="block font-medium">{o.t}</span><span className="text-sm text-tinta-400">{o.d}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {destino === 'vale' && (
+          <div className="flex items-center justify-between rounded-xl border border-papel-200 px-3 py-2 dark:border-noite-700">
+            <span>{cliente ? <>Cliente: <strong>{cliente.nome}</strong></> : <span className="text-ambar-600">Identifique o cliente que receberá o vale</span>}</span>
+            <Botao variante="discreto" className="px-2 py-1" onClick={() => setEscolher(true)}>{cliente ? 'Trocar' : 'Identificar'}</Botao>
+          </div>
+        )}
+        <Campo rotulo="Motivo da devolução" ajuda={`${motivo.trim().length} de no mínimo 10 caracteres`}>
+          <input className="campo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: produto com defeito, troca de tamanho" />
+        </Campo>
+        <p className="flex items-start gap-2 text-sm text-tinta-400"><Icone nome="alerta" className="mt-0.5 h-4 w-4 shrink-0" />Se a venda teve NFC-e autorizada, a devolução fiscal da mercadoria ainda deve ser feita com nota de entrada (será incluída no módulo de NF-e).</p>
+      </div>
+    </TelaSuspensa>
   )
 }

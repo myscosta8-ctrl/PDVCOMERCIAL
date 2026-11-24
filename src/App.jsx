@@ -10,11 +10,15 @@ import Caixa from './pages/Caixa.jsx'
 import Produtos from './pages/Produtos.jsx'
 import Vendas from './pages/Vendas.jsx'
 import Configuracoes from './pages/Configuracoes.jsx'
+import Clientes from './pages/Clientes.jsx'
+import Orcamentos from './pages/Orcamentos.jsx'
 
 const TELAS = [
   { id: 'inicio', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
   { id: 'pdv', nome: 'Frente de caixa', icone: 'pdv', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'caixa', nome: 'Caixa', icone: 'caixa', papeis: ['administrador', 'gerente', 'operador'] },
+  { id: 'orcamentos', nome: 'Orçamentos', icone: 'nota', papeis: ['administrador', 'gerente', 'operador'] },
+  { id: 'clientes', nome: 'Clientes', icone: 'usuario', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'produtos', nome: 'Produtos', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'vendas', nome: 'Vendas', icone: 'vendas', papeis: ['administrador', 'gerente'] },
   { id: 'configuracoes', nome: 'Configurações', icone: 'configuracoes', papeis: ['administrador'] },
@@ -141,6 +145,8 @@ function Painel() {
           {tela === 'inicio' && <Inicio irPara={ir} />}
           {tela === 'pdv' && <PDV />}
           {tela === 'caixa' && <Caixa />}
+          {tela === 'orcamentos' && <Orcamentos irPara={ir} />}
+          {tela === 'clientes' && <Clientes />}
           {tela === 'produtos' && <Produtos />}
           {tela === 'vendas' && perfil.papel !== 'operador' && <Vendas />}
           {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}

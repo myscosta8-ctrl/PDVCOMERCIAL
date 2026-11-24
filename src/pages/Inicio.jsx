@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
+import { NOMES_FORMAS as FORMAS } from '../lib/formas.js'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useSessao } from '../lib/sessao.js'
 import { dinheiro } from '../lib/formato.js'
 import { Barra, Botao, Cabecalho, Etiqueta, Icone, Indicador, Vazio, useAviso } from '../components/ui.jsx'
 
-const FORMAS = { dinheiro: 'Dinheiro', pix: 'PIX', debito: 'Cartão de débito', credito: 'Cartão de crédito', crediario: 'Crediário', outro: 'Outros' }
 
 function variacao(hoje, ontem) {
   if (!ontem) return hoje > 0 ? 'Sem vendas ontem para comparar' : 'Nenhuma venda ontem'

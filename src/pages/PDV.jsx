@@ -6,14 +6,20 @@ import { adicionar, alterarQuantidade, remover, totais, totalItem, paraEnvio, le
 import { dinheiro, lerNumero, arred } from '../lib/formato.js'
 import { Botao, Campo, Confirmacao, Etiqueta, Icone, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
+import { SeletorCliente, SituacaoCliente, carregarSituacao } from '../components/Clientes.jsx'
+import { Lista } from '../components/ui.jsx'
 
 const FORMAS = [
   { forma: 'dinheiro', texto: 'Dinheiro', tecla: '1' },
   { forma: 'pix', texto: 'PIX', tecla: '2' },
   { forma: 'debito', texto: 'Cartão de débito', tecla: '3' },
   { forma: 'credito', texto: 'Cartão de crédito', tecla: '4' },
-  { forma: 'crediario', texto: 'Crediário', tecla: '5' },
+  { forma: 'crediario', texto: 'Crediário', tecla: '5', cliente: true },
+  { forma: 'convenio', texto: 'Convênio', tecla: '6', cliente: true },
+  { forma: 'vale', texto: 'Vale-troca', tecla: '7', cliente: true },
 ]
+const PARCELAS = Array.from({ length: 12 }, (_, i) => ({ valor: i + 1, texto: i === 0 ? '1 parcela' : `${i + 1} parcelas` }))
+const TIPOS_PRE = [{ valor: 'orcamento', texto: 'Orçamento' }, { valor: 'pedido', texto: 'Pedido de venda' }]
 const nomeForma = (f) => FORMAS.find((x) => x.forma === f)?.texto ?? f
 
 function Tecla({ children }) {
@@ -32,7 +38,38 @@ export default function PDV() {
   const [pagamentoAberto, setPagamentoAberto] = useState(false)
   const [limparAberto, setLimparAberto] = useState(false)
   const [ultima, setUltima] = useState(null)
+  const [cliente, setCliente] = useState(null)
+  const [escolherCliente, setEscolherCliente] = useState(false)
+  const [salvarPre, setSalvarPre] = useState(false)
+  const [preVenda, setPreVenda] = useState(null)
   const t = useMemo(() => totais(itens), [itens])
+
+  // Orçamento ou pedido aberto a partir da tela Orçamentos
+  useEffect(() => {
+    let id
+    try { id = sessionStorage.getItem('carregar_pre_venda'); sessionStorage.removeItem('carregar_pre_venda') } catch {}
+    if (!id) return
+    ;(async () => {
+      const { data: pv } = await supabase.from('pre_vendas').select('*').eq('id', id).maybeSingle()
+      if (!pv || pv.status !== 'aberto') { avisar('Orçamento não está mais disponível.', 'erro'); return }
+      const ids = pv.itens.map((i) => i.produto_id)
+      const { data: prods } = await supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, ativo').in('id', ids)
+      let novos = []
+      const fora = []
+      for (const i of pv.itens) {
+        const p = prods?.find((x) => x.id === i.produto_id)
+        if (!p || !p.ativo) { fora.push(i.descricao); continue }
+        novos = adicionar(novos, p, Number(i.quantidade))
+      }
+      setItens(novos)
+      setPreVenda(pv)
+      if (pv.cliente_id) {
+        const { data: c } = await supabase.from('clientes').select('id, nome, cpf_cnpj, telefone').eq('id', pv.cliente_id).maybeSingle()
+        if (c) setCliente({ ...c, situacao: await carregarSituacao(c.id) })
+      }
+      avisar(`${pv.tipo === 'pedido' ? 'Pedido' : 'Orçamento'} nº ${pv.numero} carregado com os preços atuais.${fora.length ? ` Itens indisponíveis: ${fora.join(', ')}.` : ''}`, fora.length ? 'erro' : 'sucesso')
+    })()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const qtdItens = itens.reduce((s, i) => s + i.quantidade, 0)
 
   useEffect(() => {
@@ -40,6 +77,8 @@ export default function PDV() {
       if (e.key === 'F2') { e.preventDefault(); busca.current?.focus() }
       if (e.key === 'F4' && itens.length) { e.preventDefault(); setPagamentoAberto(true) }
       if (e.key === 'F8' && itens.length) { e.preventDefault(); setLimparAberto(true) }
+      if (e.key === 'F3') { e.preventDefault(); setEscolherCliente(true) }
+      if (e.key === 'F6' && itens.length) { e.preventDefault(); setSalvarPre(true) }
     }
     window.addEventListener('keydown', tecla)
     return () => window.removeEventListener('keydown', tecla)
@@ -86,7 +125,11 @@ export default function PDV() {
   }
 
   const concluida = async (r) => {
-    setUltima({ ...r, nfce: null }); setItens([]); setDestaque(null); setPagamentoAberto(false)
+    setUltima({ ...r, nfce: null }); setItens([]); setDestaque(null); setPagamentoAberto(false); setCliente(null)
+    if (preVenda) {
+      await supabase.from('pre_vendas').update({ status: 'convertido', venda_id: r.venda_id }).eq('id', preVenda.id)
+      setPreVenda(null)
+    }
     avisar(`Venda nº ${r.numero} concluída.`)
     busca.current?.focus()
     // Emite a NFC-e automaticamente quando a configuração fiscal já foi testada
@@ -183,8 +226,10 @@ export default function PDV() {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-tinta-400">
           <span><Tecla>F2</Tecla> buscar produto</span>
           <span><Tecla>F4</Tecla> finalizar venda</span>
+          <span><Tecla>F3</Tecla> identificar cliente</span>
+          <span><Tecla>F6</Tecla> salvar orçamento</span>
           <span><Tecla>F8</Tecla> cancelar venda</span>
-          <span><Tecla>1</Tecla> a <Tecla>5</Tecla> forma de pagamento</span>
+          <span><Tecla>1</Tecla> a <Tecla>7</Tecla> forma de pagamento</span>
           <span><Tecla>Esc</Tecla> fechar janela</span>
         </div>
       </section>
@@ -217,9 +262,15 @@ export default function PDV() {
           <div className="serrilha h-2 rotate-180" />
         </div>
 
+        {preVenda && <p className="text-sm text-tinta-400">Venda originada do {preVenda.tipo === 'pedido' ? 'pedido' : 'orçamento'} nº {preVenda.numero}</p>}
+        {cliente
+          ? <SituacaoCliente cliente={cliente} compacto onRemover={() => setCliente(null)} />
+          : <Botao variante="secundario" icone="usuario" className="w-full" onClick={() => setEscolherCliente(true)}>Identificar cliente (F3)</Botao>}
+
         <div className="grid grid-cols-2 gap-2">
+          <Botao variante="secundario" disabled={!itens.length} onClick={() => setSalvarPre(true)}>Salvar orçamento</Botao>
           <Botao variante="secundario" disabled={!itens.length} onClick={() => setLimparAberto(true)}>Cancelar venda</Botao>
-          <Botao variante="sucesso" className="py-3 text-base" disabled={!itens.length} onClick={() => setPagamentoAberto(true)}>Finalizar venda</Botao>
+          <Botao variante="sucesso" className="col-span-2 py-3 text-base" disabled={!itens.length} onClick={() => setPagamentoAberto(true)}>Finalizar venda (F4)</Botao>
         </div>
 
         {ultima && (
@@ -266,31 +317,63 @@ export default function PDV() {
         textoConfirmar="Cancelar venda"
         variante="perigo"
         onCancelar={() => setLimparAberto(false)}
-        onConfirmar={() => { setItens([]); setDestaque(null); setLimparAberto(false) }}
+        onConfirmar={() => { setItens([]); setDestaque(null); setLimparAberto(false); setCliente(null); setPreVenda(null) }}
       />
 
+      <SeletorCliente aberta={escolherCliente} onFechar={() => setEscolherCliente(false)} onEscolher={(c) => { setCliente(c); setEscolherCliente(false); busca.current?.focus() }} />
+
+      {salvarPre && (
+        <SalvarPreVenda itens={itens} cliente={cliente} onFechar={() => setSalvarPre(false)}
+          onSalvo={(pv) => { setSalvarPre(false); setItens([]); setDestaque(null); setCliente(null); avisar(`${pv.tipo === 'pedido' ? 'Pedido' : 'Orçamento'} nº ${pv.numero} salvo.`) }} />
+      )}
+
       {pagamentoAberto && (
-        <Pagamento caixa={caixa} itens={itens} onFechar={() => setPagamentoAberto(false)} onConcluir={concluida} />
+        <Pagamento caixa={caixa} itens={itens} cliente={cliente} onFechar={() => setPagamentoAberto(false)} onConcluir={concluida} />
       )}
     </div>
   )
 }
 
-function Pagamento({ caixa, itens, onFechar, onConcluir }) {
+function Pagamento({ caixa, itens, cliente, onFechar, onConcluir }) {
   const avisar = useAviso()
   const [desconto, setDesconto] = useState('')
   const [cpf, setCpf] = useState('')
   const [pagamentos, setPagamentos] = useState([])
   const [valor, setValor] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [parcelas, setParcelas] = useState(1)
+  const amanha30 = new Date(Date.now() + 30 * 864e5 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+  const [primeiroVenc, setPrimeiroVenc] = useState(amanha30)
   const desc = lerNumero(desconto) || 0
   const t = totais(itens, desc, pagamentos)
+  const sit = cliente?.situacao ?? {}
+  const usado = (f) => pagamentos.filter((p) => p.forma === f).reduce((s, p) => s + p.valor, 0)
+  const valeDisponivel = arred(Number(sit.vale ?? 0) - usado('vale'))
+  const limiteDisponivel = arred(Number(sit.disponivel ?? 0) - usado('crediario'))
+
+  const motivoBloqueio = (f) => {
+    if (!f.cliente) return null
+    if (!cliente) return 'Identifique o cliente'
+    if (sit.bloqueado) return 'Cliente bloqueado'
+    if (f.forma === 'crediario' && limiteDisponivel <= 0) return 'Sem limite disponível'
+    if (f.forma === 'convenio' && !sit.convenio) return 'Cliente sem convênio'
+    if (f.forma === 'vale' && valeDisponivel <= 0) return 'Sem vale-troca'
+    return null
+  }
 
   const incluir = (forma) => {
-    const v = valor === '' ? t.falta : lerNumero(valor)
+    const f = FORMAS.find((x) => x.forma === forma)
+    const bloqueio = motivoBloqueio(f)
+    if (bloqueio) { avisar(`${f.texto}: ${bloqueio.toLowerCase()}.`, 'erro'); return }
+    let v = valor === '' ? t.falta : lerNumero(valor)
+    if (valor === '' && forma === 'vale') v = Math.min(t.falta, valeDisponivel)
     if (!(v > 0)) { avisar('Informe um valor válido.', 'erro'); return }
     if (forma !== 'dinheiro' && v > t.falta) { avisar('Somente o pagamento em dinheiro pode gerar troco.', 'erro'); return }
-    setPagamentos((p) => [...p, { forma, valor: arred(v) }])
+    if (forma === 'vale' && v > valeDisponivel) { avisar(`Saldo de vale-troca: ${dinheiro(valeDisponivel)}.`, 'erro'); return }
+    if (forma === 'crediario' && v > limiteDisponivel) { avisar(`Limite disponível: ${dinheiro(limiteDisponivel)}.`, 'erro'); return }
+    const pg = { forma, valor: arred(v) }
+    if (forma === 'crediario') { pg.parcelas = parcelas; pg.primeiro_vencimento = primeiroVenc }
+    setPagamentos((p) => [...p, pg])
     setValor('')
   }
 
@@ -311,6 +394,7 @@ function Pagamento({ caixa, itens, onFechar, onConcluir }) {
       p_itens: paraEnvio(itens),
       p_pagamentos: pagamentos,
       p_desconto: desc,
+      p_cliente: cliente?.id ?? null,
       p_cpf: cpf.replace(/\D/g, '') || null,
     })
     setEnviando(false)
@@ -343,13 +427,26 @@ function Pagamento({ caixa, itens, onFechar, onConcluir }) {
           <Campo rotulo="Valor recebido" ajuda="Deixe vazio para receber exatamente o valor que falta. Depois escolha a forma de pagamento.">
             <input className="campo num text-lg" inputMode="decimal" data-valor="sim" value={valor} onChange={(e) => setValor(e.target.value)} placeholder={dinheiro(t.falta)} autoFocus />
           </Campo>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {FORMAS.map((f) => (
-              <button key={f.forma} onClick={() => incluir(f.forma)} className="flex flex-col items-center gap-1.5 rounded-xl border border-papel-300 px-2 py-3 text-sm font-medium transition hover:border-caixa-500 hover:bg-caixa-50 dark:border-noite-600 dark:hover:bg-noite-700">
-                <Tecla>{f.tecla}</Tecla>{f.texto}
-              </button>
-            ))}
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {FORMAS.map((f) => {
+              const bloqueio = motivoBloqueio(f)
+              return (
+                <button key={f.forma} onClick={() => incluir(f.forma)} disabled={!!bloqueio} title={bloqueio ?? ''}
+                  className="flex flex-col items-center gap-1 rounded-xl border border-papel-300 px-2 py-3 text-sm font-medium transition hover:border-caixa-500 hover:bg-caixa-50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-papel-300 disabled:hover:bg-transparent dark:border-noite-600 dark:hover:bg-noite-700">
+                  <Tecla>{f.tecla}</Tecla>{f.texto}
+                  {bloqueio ? <span className="text-xs font-normal text-tinta-400">{bloqueio}</span>
+                    : f.forma === 'vale' ? <span className="num text-xs font-normal text-tinta-400">saldo {dinheiro(valeDisponivel)}</span>
+                    : f.forma === 'crediario' ? <span className="num text-xs font-normal text-tinta-400">limite {dinheiro(limiteDisponivel)}</span> : null}
+                </button>
+              )
+            })}
           </div>
+          {cliente && !motivoBloqueio(FORMAS[4]) && (
+            <div className="mt-3 grid gap-3 rounded-xl border border-papel-200 p-3 sm:grid-cols-2 dark:border-noite-700">
+              <Campo rotulo="Crediário: número de parcelas"><Lista valor={parcelas} opcoes={PARCELAS} onMudar={setParcelas} /></Campo>
+              <Campo rotulo="Vencimento da 1ª parcela"><input type="date" className="campo" value={primeiroVenc} onChange={(e) => setPrimeiroVenc(e.target.value)} /></Campo>
+            </div>
+          )}
         </div>
       )}
 
@@ -357,7 +454,7 @@ function Pagamento({ caixa, itens, onFechar, onConcluir }) {
         <ul className="mt-4 divide-y divide-papel-200 rounded-xl border border-papel-200 dark:divide-noite-700 dark:border-noite-700">
           {pagamentos.map((p, i) => (
             <li key={i} className="flex items-center justify-between px-4 py-2.5">
-              <span>{nomeForma(p.forma)}</span>
+              <span>{nomeForma(p.forma)}{p.parcelas > 1 ? ` em ${p.parcelas}× de ${dinheiro(p.valor / p.parcelas)}` : ''}</span>
               <span className="flex items-center gap-3">
                 <strong className="num">{dinheiro(p.valor)}</strong>
                 <button className="rounded p-1 text-tinta-400 hover:text-rubro-600" onClick={() => setPagamentos((x) => x.filter((_, j) => j !== i))} aria-label="Remover pagamento"><Icone nome="fechar" className="h-4 w-4" /></button>
@@ -369,8 +466,48 @@ function Pagamento({ caixa, itens, onFechar, onConcluir }) {
       {!t.trocoValido && <p className="mt-2 text-sm text-rubro-600">O troco só pode sair de pagamento em dinheiro.</p>}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <Campo rotulo="Desconto na venda (R$)"><input className="campo num" inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0,00" /></Campo>
+        <Campo rotulo="Desconto na venda (R$)" ajuda={sit.convenio && Number(sit.convenio.desconto) > 0 ? <button type="button" className="font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => setDesconto(String(arred(t.subtotal * Number(sit.convenio.desconto) / 100)).replace('.', ','))}>Aplicar desconto do convênio ({String(sit.convenio.desconto).replace('.', ',')}%)</button> : undefined}>
+          <input className="campo num" inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0,00" />
+        </Campo>
         <Campo rotulo="CPF ou CNPJ na nota (opcional)"><input className="campo num" inputMode="numeric" value={cpf} onChange={(e) => setCpf(e.target.value)} /></Campo>
+      </div>
+    </TelaSuspensa>
+  )
+}
+
+function SalvarPreVenda({ itens, cliente, onFechar, onSalvo }) {
+  const avisar = useAviso()
+  const [tipo, setTipo] = useState('orcamento')
+  const [nome, setNome] = useState(cliente?.nome ?? '')
+  const validadePadrao = new Date(Date.now() + 7 * 864e5 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+  const [validade, setValidade] = useState(validadePadrao)
+  const [obs, setObs] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const t = totais(itens)
+
+  const salvar = async () => {
+    setEnviando(true)
+    const { data, error } = await supabase.from('pre_vendas').insert({
+      tipo, cliente_id: cliente?.id ?? null, cliente_nome: nome.trim() || null,
+      itens: itens.map((i) => ({ produto_id: i.produto_id, descricao: i.descricao, quantidade: i.quantidade, preco_unitario: i.preco_unitario, desconto: i.desconto || 0 })),
+      total: t.total, validade: validade || null, observacao: obs.trim() || null,
+    }).select('numero, tipo').single()
+    setEnviando(false)
+    if (error) { avisar(mensagemErro(error), 'erro'); return }
+    onSalvo(data)
+  }
+
+  return (
+    <TelaSuspensa aberta titulo="Salvar orçamento ou pedido" subtitulo={`${itens.length} produto(s), total ${dinheiro(t.total)}. A venda em andamento será limpa.`} onFechar={onFechar}
+      rodape={<>
+        <Botao variante="secundario" onClick={onFechar}>Voltar à venda</Botao>
+        <Botao onClick={salvar} carregando={enviando}>Salvar {tipo === 'pedido' ? 'pedido' : 'orçamento'}</Botao>
+      </>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Campo rotulo="Tipo"><Lista valor={tipo} opcoes={TIPOS_PRE} onMudar={setTipo} /></Campo>
+        <Campo rotulo="Válido até"><input type="date" className="campo" value={validade} onChange={(e) => setValidade(e.target.value)} /></Campo>
+        <div className="sm:col-span-2"><Campo rotulo="Nome do cliente" ajuda={cliente ? 'Cliente identificado na venda' : 'Opcional, para localizar depois'}><input className="campo" value={nome} onChange={(e) => setNome(e.target.value)} disabled={!!cliente} /></Campo></div>
+        <div className="sm:col-span-2"><Campo rotulo="Observação"><textarea className="campo" rows={2} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: separar para retirada amanhã" /></Campo></div>
       </div>
     </TelaSuspensa>
   )

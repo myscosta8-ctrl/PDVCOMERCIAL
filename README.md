@@ -28,7 +28,8 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Fase 1A — Banco multiempresa, frente de caixa, caixa (abertura, sangria, suprimento, fechamento), produtos, estoque e vendas
 - [x] Fase 1B — Emissão de NFC-e: certificado A1 e CSC no cofre (Vault), XML 4.00 assinado, envio à SEFAZ (SVRS) pela Edge Function `nfce`, QR Code e DANFE NFC-e 80 mm
 - [ ] Fase 1B.2 — Cancelamento de NFC-e (evento), inutilização de numeração e contingência off-line
-- [ ] Fase 1C — Entrada de estoque por XML da NF-e, lote e validade na venda, clientes e crediário
+- [x] Itens 1 a 4 — Devolução e troca (vale-troca), orçamento e pedido, clientes, convênios, crediário com aviso de atraso e recebimento de contas no caixa
+- [ ] Fase 1C — Entrada de estoque por XML da NF-e, lote e validade na venda
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

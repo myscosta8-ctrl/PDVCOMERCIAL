@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
+import { NOMES_FORMAS as NOMES } from '../lib/formas.js'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useCaixaAberto, terminalAtual, definirTerminal } from '../lib/caixa.js'
 import { dinheiro, lerNumero, dataHora, arred } from '../lib/formato.js'
+import { ReceberConta } from '../components/ReceberConta.jsx'
 import { Barra, Botao, Cabecalho, Campo, Etiqueta, Icone, Indicador, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 
-const NOMES = { dinheiro: 'Dinheiro', pix: 'PIX', debito: 'Cartão de débito', credito: 'Cartão de crédito', crediario: 'Crediário', outro: 'Outros' }
 const TITULOS = { abrir: 'Abertura de caixa', sangria: 'Sangria', suprimento: 'Suprimento', fechar: 'Fechamento de caixa' }
 const DESCRICOES = {
   abrir: 'Informe o dinheiro que fica na gaveta para troco.',
@@ -25,6 +26,7 @@ export default function Caixa() {
   const [terminal, setTerminal] = useState(String(terminalAtual()))
   const [enviando, setEnviando] = useState(false)
   const [fechamento, setFechamento] = useState(null)
+  const [recebendo, setRecebendo] = useState(false)
 
   const carregar = async () => {
     const { data: h } = await supabase.from('caixas').select('*').eq('status', 'fechado').order('fechado_em', { ascending: false }).limit(8)
@@ -79,6 +81,7 @@ export default function Caixa() {
         descricao={caixa ? `Terminal ${caixa.numero_terminal}, aberto em ${dataHora(caixa.aberto_em)}` : `Terminal ${terminalAtual()} sem caixa aberto`}
       >
         {caixa ? <>
+          <Botao variante="secundario" icone="usuario" onClick={() => setRecebendo(true)}>Receber conta</Botao>
           <Botao variante="secundario" icone="mais" onClick={() => abrirJanela('suprimento')}>Suprimento</Botao>
           <Botao variante="secundario" icone="dinheiro" onClick={() => abrirJanela('sangria')}>Sangria</Botao>
           <Botao variante="perigo" onClick={() => abrirJanela('fechar')}>Fechar caixa</Botao>
@@ -103,8 +106,8 @@ export default function Caixa() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Indicador titulo="Fundo de troco" icone="caixa" valor={dinheiro(resumo.abertura)} detalhe="Valor informado na abertura" />
             <Indicador titulo="Vendas no caixa" icone="vendas" valor={resumo.qtd_vendas} detalhe={`${dinheiro(totalVendas)} recebidos`} />
-            <Indicador titulo="Entradas e retiradas" icone="dinheiro" valor={dinheiro(Number(resumo.suprimentos) - Number(resumo.sangrias))} detalhe={`${dinheiro(resumo.suprimentos)} de suprimento, ${dinheiro(resumo.sangrias)} de sangria`} />
-            <Indicador titulo="Dinheiro na gaveta" icone="ok" tom="positivo" valor={dinheiro(resumo.dinheiro_esperado)} detalhe="Valor esperado agora" />
+            <Indicador titulo="Contas recebidas" icone="usuario" valor={dinheiro(Object.values(resumo.recebimentos ?? {}).reduce((a, b) => a + Number(b), 0))} detalhe={Number(resumo.devolucoes_dinheiro) > 0 ? `${dinheiro(resumo.devolucoes_dinheiro)} devolvidos em dinheiro` : 'Crediário e convênio'} />
+            <Indicador titulo="Dinheiro na gaveta" icone="ok" tom="positivo" valor={dinheiro(resumo.dinheiro_esperado)} detalhe={`Suprimentos ${dinheiro(resumo.suprimentos)}, sangrias ${dinheiro(resumo.sangrias)}`} />
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -166,6 +169,8 @@ export default function Caixa() {
           </div>
         )}
       </section>
+
+      {recebendo && caixa && <ReceberConta caixa={caixa} onFechar={() => setRecebendo(false)} onConcluir={() => { setRecebendo(false); carregar() }} />}
 
       <TelaSuspensa
         aberta={!!janela}
