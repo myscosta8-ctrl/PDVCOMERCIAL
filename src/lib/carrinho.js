@@ -47,7 +47,21 @@ export function totais(itens, descontoGeral = 0, pagamentos = []) {
 
 // Formato esperado pela função finalizar_venda do banco
 export const paraEnvio = (itens) =>
-  itens.map((i) => ({ produto_id: i.produto_id, quantidade: i.quantidade, desconto: i.desconto || 0, ...(i.lote_id ? { lote_id: i.lote_id } : {}) }))
+  itens.map((i) => ({ produto_id: i.produto_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario, desconto: i.desconto || 0, ...(i.lote_id ? { lote_id: i.lote_id } : {}) }))
+
+// Aplica os preços vigentes calculados pelo banco (mesma ordem dos itens). Retorna os mesmos itens se nada mudou.
+export function aplicarPrecos(itens, precos) {
+  let mudou = false
+  const novos = itens.map((i, k) => {
+    const p = precos?.[k]
+    if (!p || p.produto_id !== i.produto_id) return i
+    const preco = Number(p.preco), base = Number(p.preco_base)
+    if (preco === i.preco_unitario && base === i.preco_base && p.nome === i.preco_nome) return i
+    mudou = true
+    return { ...i, preco_unitario: preco, preco_base: base, preco_origem: p.origem, preco_nome: p.nome }
+  })
+  return mudou ? novos : itens
+}
 
 // Troca o lote de um item (junta com outro item do mesmo lote, se houver)
 export function trocarLote(itens, chave, lote) {

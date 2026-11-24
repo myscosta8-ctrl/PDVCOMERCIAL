@@ -5,6 +5,7 @@ import { dinheiro, lerNumero } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Etiqueta, Icone, Indicador, Lista, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { BuscaProduto } from '../components/BuscaProduto.jsx'
 import { JanelaEtiquetas } from '../components/Etiquetas.jsx'
+import { GerenciarGrade } from '../components/Grade.jsx'
 import { precoSugerido, markupDeMargem } from '../lib/carrinho.js'
 
 const VAZIO = {
@@ -30,7 +31,7 @@ const FILTROS = [
   { id: 'inativos', nome: 'Inativos' },
 ]
 const ncmValido = (p) => /^\d{8}$/.test(p.ncm ?? '')
-const estoqueBaixo = (p) => p.ativo && Number(p.estoque_atual) <= Number(p.estoque_minimo)
+const estoqueBaixo = (p) => p.ativo && !p.e_kit && !p.e_grade && Number(p.estoque_atual) <= Number(p.estoque_minimo)
 
 export default function Produtos() {
   const perfil = useSessao()
@@ -48,6 +49,7 @@ export default function Produtos() {
   const [etiquetas, setEtiquetas] = useState(null)
   const [lotes, setLotes] = useState(null)
   const [buscaComp, setBuscaComp] = useState(false)
+  const [grade, setGrade] = useState(null)
   const [markupPadrao, setMarkupPadrao] = useState(30)
 
   const carregar = async () => {
@@ -72,9 +74,16 @@ export default function Produtos() {
     }
   }, [lista])
 
+  const estoqueGrade = useMemo(() => {
+    const m = {}
+    for (const p of lista ?? []) if (p.produto_pai_id) m[p.produto_pai_id] = (m[p.produto_pai_id] ?? 0) + Number(p.estoque_atual)
+    return m
+  }, [lista])
+
   const visiveis = useMemo(() => {
     const termo = busca.trim().toLowerCase()
     return (lista ?? []).filter((p) => {
+      if (p.produto_pai_id && !termo && filtro !== 'baixo') return false
       if (filtro === 'inativos' ? p.ativo : !p.ativo) return false
       if (filtro === 'baixo' && !estoqueBaixo(p)) return false
       if (filtro === 'sem_ncm' && ncmValido(p)) return false
@@ -97,7 +106,7 @@ export default function Produtos() {
     const componentes = p.componentes ?? []
     if (p.e_kit && !componentes.length) { avisar('Inclua os produtos que compõem o kit.', 'erro'); return }
     if (p.e_kit) p.controla_lote = false
-    delete p.estoque_atual; delete p.empresa_id; delete p.criado_em; delete p.atualizado_em; delete p.componentes
+    delete p.estoque_atual; delete p.empresa_id; delete p.criado_em; delete p.atualizado_em; delete p.componentes; delete p.e_grade; delete p.produto_pai_id; delete p.atributos
     setEnviando(true)
     const r = p.id ? await supabase.from('produtos').update(p).eq('id', p.id).select('id').single() : await supabase.from('produtos').insert(p).select('id').single()
     if (r.error) {
@@ -209,7 +218,7 @@ export default function Produtos() {
                       <td className="num text-right text-tinta-600 dark:text-tinta-300">{dinheiro(p.preco_custo)}</td>
                       <td className="num text-right font-semibold">{dinheiro(p.preco_venda)}</td>
                       <td className={`num text-right ${mg === null ? 'text-tinta-300' : mg < 15 ? 'text-ambar-600 dark:text-ambar-300' : 'text-caixa-600 dark:text-caixa-300'}`}>{mg === null ? '—' : `${mg.toFixed(1).replace('.', ',')}%`}</td>
-                      <td className={`num text-right font-semibold ${p.e_kit ? '' : Number(p.estoque_atual) <= 0 ? 'text-rubro-600' : estoqueBaixo(p) ? 'text-ambar-600' : ''}`}>{p.e_kit ? <span className="font-sans text-sm font-normal text-tinta-400">pelos componentes</span> : <>{Number(p.estoque_atual)} <span className="font-sans text-xs font-normal text-tinta-400">{p.unidade}</span></>}</td>
+                      <td className={`num text-right font-semibold ${p.e_kit || p.e_grade ? '' : Number(p.estoque_atual) <= 0 ? 'text-rubro-600' : estoqueBaixo(p) ? 'text-ambar-600' : ''}`}>{p.e_grade ? <>{estoqueGrade[p.id] ?? 0} <span className="font-sans text-xs font-normal text-tinta-400">na grade</span></> : p.e_kit ? <span className="font-sans text-sm font-normal text-tinta-400">pelos componentes</span> : <>{Number(p.estoque_atual)} <span className="font-sans text-xs font-normal text-tinta-400">{p.unidade}</span></>}</td>
                       <td>
                         <div className="flex flex-wrap gap-1">
                           {!p.ativo && <Etiqueta>Inativo</Etiqueta>}
@@ -217,14 +226,17 @@ export default function Produtos() {
                           {estoqueBaixo(p) && <Etiqueta tom="alerta">Repor</Etiqueta>}
                           {p.controlado && <Etiqueta tom="critico">Controlado</Etiqueta>}
                           {p.e_kit && <Etiqueta>Kit</Etiqueta>}
+                          {p.e_grade && <Etiqueta>Grade</Etiqueta>}
+                          {p.produto_pai_id && <Etiqueta>Variação</Etiqueta>}
                           {p.controla_lote && <Etiqueta>Lote</Etiqueta>}
-                          {p.ativo && ncmValido(p) && !estoqueBaixo(p) && !p.controlado && !p.e_kit && !p.controla_lote && <Etiqueta tom="positivo">Regular</Etiqueta>}
+                          {p.ativo && ncmValido(p) && !estoqueBaixo(p) && !p.controlado && !p.e_kit && !p.e_grade && !p.produto_pai_id && !p.controla_lote && <Etiqueta tom="positivo">Regular</Etiqueta>}
                         </div>
                       </td>
                       <td className="whitespace-nowrap text-right">
                         {p.controla_lote && <Botao variante="discreto" className="px-2 py-1" onClick={() => verLotes(p)}>Lotes</Botao>}
+                        {pode && p.e_grade && <Botao variante="discreto" className="px-2 py-1" onClick={() => setGrade(p)}>Grade</Botao>}
                         {pode && <>
-                          {!p.e_kit && <Botao variante="discreto" className="px-2 py-1" onClick={() => setEstoque({ produto: p, tipo: 'entrada', quantidade: '', custo: '', obs: '', lote: '', validade: '' })}>Estoque</Botao>}
+                          {!p.e_kit && !p.e_grade && <Botao variante="discreto" className="px-2 py-1" onClick={() => setEstoque({ produto: p, tipo: 'entrada', quantidade: '', custo: '', obs: '', lote: '', validade: '' })}>Estoque</Botao>}
                           <Botao variante="discreto" className="px-2 py-1" onClick={() => editar(p)}>Editar</Botao>
                         </>}
                       </td>
@@ -279,9 +291,16 @@ export default function Produtos() {
               </div>
             </fieldset>
 
+            {edicao.id && !edicao.e_kit && !edicao.produto_pai_id && (edicao.e_grade || Number(edicao.estoque_atual) === 0) && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-papel-200 p-4 dark:border-noite-700">
+                <span className="text-sm">{edicao.e_grade ? 'Este produto é o modelo de uma grade de tamanho e cor.' : 'Vende em tamanhos ou cores diferentes? Transforme em grade: cada combinação vira um item com estoque e código próprios.'}</span>
+                <Botao variante="secundario" onClick={() => { const p = edicao; setEdicao(null); setGrade(p) }}>{edicao.e_grade ? 'Abrir grade' : 'Criar grade'}</Botao>
+              </div>
+            )}
+
             <fieldset className="rounded-xl border border-papel-200 p-4 dark:border-noite-700">
               <legend className="px-1 text-sm font-semibold">Kit</legend>
-              <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={edicao.e_kit} onChange={m('e_kit')} disabled={!!edicao.id && Number(edicao.estoque_atual) !== 0 && !edicao.e_kit} /> Este produto é um kit (a venda baixa o estoque dos componentes)</label>
+              <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={edicao.e_kit} onChange={m('e_kit')} disabled={edicao.e_grade || !!edicao.produto_pai_id || (!!edicao.id && Number(edicao.estoque_atual) !== 0 && !edicao.e_kit)} /> Este produto é um kit (a venda baixa o estoque dos componentes)</label>
               {edicao.e_kit && (
                 <div className="mt-3 space-y-2">
                   {edicao.componentes.map((c, i) => (
@@ -365,6 +384,8 @@ export default function Produtos() {
             setBuscaComp(false)
           }} />
       )}
+
+      {grade && <GerenciarGrade produto={grade} onFechar={() => setGrade(null)} onAlterado={carregar} />}
 
       {etiquetas && <JanelaEtiquetas produtos={etiquetas} onFechar={() => { setEtiquetas(null); setSelecionados({}) }} />}
 

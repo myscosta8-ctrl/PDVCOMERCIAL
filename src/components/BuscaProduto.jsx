@@ -16,6 +16,7 @@ export function BuscaProduto({ titulo = 'Escolher produto', termoInicial = '', s
     let q = supabase.from('produtos').select('id, descricao, ean, codigo, unidade, preco_venda, preco_custo, markup, estoque_atual, e_kit, controla_lote').eq('ativo', true).order('descricao').limit(30)
     q = /^\d{6,14}$/.test(t) ? q.or(`ean.eq.${t},codigo.eq.${t}`) : q.or(`descricao.ilike.%${t}%,codigo.eq.${t}`)
     if (semKits) q = q.eq('e_kit', false)
+    q = q.eq('e_grade', false) // modelo de grade não é vendido nem movimentado; use as variações
     const { data, error } = await q
     if (error) avisar(mensagemErro(error), 'erro')
     else setLista(data)

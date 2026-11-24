@@ -11,7 +11,7 @@ const EMP = {
 }
 const P = (id, descricao, ean, preco_venda, preco_custo, estoque_atual, estoque_minimo, extra = {}) => ({
   id, descricao, ean, codigo: String(100 + Number(id.slice(1))), preco_venda, preco_custo, estoque_atual, estoque_minimo, unidade: 'UN',
-  ncm: '30049099', cfop: '5102', csosn: '102', origem: 0, ativo: true, controlado: false, controla_lote: true, ...extra,
+  ncm: '30049099', cfop: '5102', csosn: '102', origem: 0, ativo: true, controlado: false, controla_lote: true, produto_pai_id: null, atributos: {}, ...extra,
 })
 const PRODUTOS = [
   P('p1', 'Dipirona Monoidratada 500 mg, 10 comprimidos', '7896004700120', 6.9, 2.35, 84, 20),
@@ -22,6 +22,9 @@ const PRODUTOS = [
   P('p6', 'Protetor solar FPS 50, 120 ml', '7891010245321', 59.9, 31.0, 7, 6, { ncm: '33049910' }),
   P('p7', 'Fralda infantil tamanho G, 30 unidades', '7896007541124', 54.9, 38.5, 22, 10, { ncm: null, controla_lote: false, unidade: 'PCT' }),
   P('p8', 'Vitamina C 1 g efervescente, 10 comprimidos', '7896112402158', 16.9, 6.4, 31, 10),
+  P('p9', 'Meia esportiva cano médio', '7890000009999', 19.9, 7.5, 0, 0, { e_grade: true, controla_lote: false, ncm: '61159500' }),
+  ...[['P', 'Branca', 6], ['M', 'Branca', 11], ['G', 'Branca', 0], ['P', 'Preta', 3], ['M', 'Preta', 8], ['G', 'Preta', 5]].map(([t, c, e], i) =>
+    P(`pv${i}`, `Meia esportiva cano médio ${c} ${t}`, `78900000100${i}`, 19.9, 7.5, e, 2, { produto_pai_id: 'p9', atributos: { tamanho: t, cor: c }, controla_lote: false, ncm: '61159500' })),
 ]
 const VENDAS = [
   { id: 'v7', numero: 1048, subtotal: 89.7, desconto: 0, total: 89.7, troco: 10.3, status: 'concluida', criado_em: h(16, 42), operador: { nome: 'Ana Ribeiro' }, pagamentos: [{ forma: 'dinheiro', valor: 100 }], notas: [{ numero: 312, status: 'autorizada' }] },
@@ -73,6 +76,18 @@ const TABELAS = {
     { id: 'pv1', numero: 18, tipo: 'orcamento', cliente_nome: 'Joana Martins', itens: [{ produto_id: 'p6', descricao: 'Protetor solar FPS 50, 120 ml', quantidade: 2, preco_unitario: 59.9, desconto: 0 }, { produto_id: 'p8', descricao: 'Vitamina C 1 g efervescente, 10 comprimidos', quantidade: 1, preco_unitario: 16.9, desconto: 0 }], total: 136.7, validade: '2026-11-30', status: 'aberto', criado_em: h(10, 15), criador: { nome: 'Ana Ribeiro' } },
     { id: 'pv2', numero: 7, tipo: 'pedido', cliente_nome: 'Clínica Bem-Estar', itens: [{ produto_id: 'p3', descricao: 'Soro fisiológico 0,9%, 500 ml', quantidade: 20, preco_unitario: 8.9, desconto: 0 }], total: 178, validade: '2026-11-26', status: 'aberto', criado_em: h(8, 40), criador: { nome: 'Carlos Lima' } },
     { id: 'pv3', numero: 17, tipo: 'orcamento', cliente_nome: 'Raimundo Pereira', itens: [{ produto_id: 'p1', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', quantidade: 3, preco_unitario: 6.9, desconto: 0 }], total: 20.7, validade: '2026-11-20', status: 'aberto', criado_em: '2026-11-13T14:00:00Z', criador: { nome: 'Ana Ribeiro' } },
+  ],
+  promocoes: [
+    { id: 'pr1', nome: 'Semana da beleza', tipo: 'percentual', inicio: '2026-11-20', fim: '2026-11-30', percentual: 15, categoria_id: 'k2', ativo: true, itens: [] },
+    { id: 'pr2', nome: 'Protetor em oferta', tipo: 'preco', inicio: '2026-11-24', fim: '2026-11-27', percentual: null, categoria_id: null, ativo: true, itens: [{ id: 'x' }] },
+    { id: 'pr3', nome: 'Atacado de soro', tipo: 'quantidade', inicio: '2026-11-01', fim: '2026-12-31', percentual: null, categoria_id: null, ativo: true, itens: [{ id: 'y' }] },
+    { id: 'pr4', nome: 'Natal', tipo: 'percentual', inicio: '2026-12-15', fim: '2026-12-24', percentual: 10, categoria_id: null, ativo: true, itens: [{ id: 'z' }, { id: 'w' }] },
+    { id: 'pr5', nome: 'Dia das crianças', tipo: 'preco', inicio: '2026-10-05', fim: '2026-10-12', percentual: null, categoria_id: null, ativo: true, itens: [{ id: 'v' }] },
+  ],
+  promocao_itens: [{ produto_id: 'p6', preco: 49.9, quantidade_minima: 1, produto: { descricao: 'Protetor solar FPS 50, 120 ml', preco_venda: 59.9, unidade: 'UN' } }],
+  tabelas_preco: [
+    { id: 'tp1', nome: 'Atacado', ajuste_percentual: -12, ativo: true, itens: [{ id: 'a' }], clientes: [{ count: 3 }] },
+    { id: 'tp2', nome: 'Clínicas parceiras', ajuste_percentual: -8, ativo: true, itens: [], clientes: [{ count: 2 }] },
   ],
   fornecedores: [{ id: 'f1', cnpj: '11222333000144', razao_social: 'Distribuidora Norte Farma Ltda', nome_fantasia: 'Norte Farma' }],
   produto_fornecedor: [{ codigo_fornecedor: 'DIP500', fator: 1, produto: { id: 'p1', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', unidade: 'UN', preco_venda: 6.9, preco_custo: 2.35, markup: null, e_kit: false, ean: '7896004700120' } }],
@@ -140,7 +155,16 @@ export const clienteDemo = {
     signInWithPassword: async () => ({ error: null }),
   },
   from: consulta,
-  rpc: async (nome) => ({ data: RPC[nome] ?? null, error: null }),
+  rpc: async (nome, args) => {
+    if (nome === 'precos_itens') {
+      return { data: args.p_itens.map((i) => {
+        const p = PRODUTOS.find((x) => x.id === i.produto_id) ?? { preco_venda: 0 }
+        const promo = i.produto_id === 'p6' ? { preco: 49.9, origem: 'promocao', nome: 'Protetor em oferta' } : null
+        return { produto_id: i.produto_id, preco: promo?.preco ?? p.preco_venda, preco_base: p.preco_venda, origem: promo?.origem ?? 'base', nome: promo?.nome ?? null }
+      }), error: null }
+    }
+    return { data: RPC[nome] ?? null, error: null }
+  },
   functions: { invoke: async () => ({ data: { titular: EMP.certificado_titular, validade: EMP.certificado_validade, sefaz: { codigo: '107', mensagem: 'Serviço em Operação' } }, error: null }) },
 }
 

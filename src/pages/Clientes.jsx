@@ -12,7 +12,7 @@ const ABAS = [
   { id: 'receber', nome: 'Contas a receber' },
   { id: 'convenios', nome: 'Convênios' },
 ]
-const CLIENTE_VAZIO = { nome: '', cpf_cnpj: '', telefone: '', email: '', nascimento: '', limite_credito: '', convenio_id: null, matricula: '', observacoes: '', bloqueado: false, ativo: true, endereco: { logradouro: '', numero: '', bairro: '', municipio: '', cep: '' } }
+const CLIENTE_VAZIO = { tabela_preco_id: null, nome: '', cpf_cnpj: '', telefone: '', email: '', nascimento: '', limite_credito: '', convenio_id: null, matricula: '', observacoes: '', bloqueado: false, ativo: true, endereco: { logradouro: '', numero: '', bairro: '', municipio: '', cep: '' } }
 const CONVENIO_VAZIO = { nome: '', cnpj: '', desconto_percentual: '', dia_fechamento: '25', dias_vencimento: '10', ativo: true }
 const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 const dataBR = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR') : '')
@@ -26,6 +26,7 @@ export default function Clientes() {
   const [clientes, setClientes] = useState(null)
   const [contas, setContas] = useState([])
   const [convenios, setConvenios] = useState([])
+  const [tabelas, setTabelas] = useState([])
   const [busca, setBusca] = useState('')
   const [soAtraso, setSoAtraso] = useState(false)
   const [edicao, setEdicao] = useState(null)
@@ -40,6 +41,7 @@ export default function Clientes() {
       supabase.from('contas_receber').select('*, cliente:clientes(nome, telefone)').eq('status', 'aberta').order('vencimento').limit(2000),
       supabase.from('convenios').select('*').order('nome'),
     ])
+    supabase.from('tabelas_preco').select('id, nome').eq('ativo', true).order('nome').then(({ data }) => setTabelas(data ?? []))
     if (c.error) avisar(mensagemErro(c.error), 'erro')
     setClientes(c.data ?? []); setContas(r.data ?? []); setConvenios(v.data ?? [])
   }
@@ -85,7 +87,7 @@ export default function Clientes() {
     if (Number.isNaN(c.limite_credito) || c.limite_credito < 0) { avisar('Limite de crédito inválido.', 'erro'); return }
     c.cpf_cnpj = c.cpf_cnpj?.replace(/\D/g, '') || null
     if (c.cpf_cnpj && ![11, 14].includes(c.cpf_cnpj.length)) { avisar('CPF deve ter 11 números e CNPJ 14.', 'erro'); return }
-    if (!gestor) { delete c.limite_credito; delete c.bloqueado }
+    if (!gestor) { delete c.limite_credito; delete c.bloqueado; delete c.tabela_preco_id }
     c.nascimento = c.nascimento || null
     for (const k of ['convenio', 'empresa_id', 'criado_em']) delete c[k]
     setEnviando(true)
@@ -293,6 +295,7 @@ export default function Clientes() {
                 <Campo rotulo="Limite do crediário (R$)" ajuda="Zero impede venda no crediário"><input className="campo num" inputMode="decimal" value={edicao.limite_credito} onChange={m('limite_credito')} disabled={!gestor} /></Campo>
                 <div className="sm:col-span-2"><Campo rotulo="Convênio"><Lista valor={edicao.convenio_id} opcoes={[{ valor: null, texto: 'Sem convênio' }, ...convenios.filter((v) => v.ativo).map((v) => ({ valor: v.id, texto: v.nome }))]} onMudar={(v) => setEdicao((x) => ({ ...x, convenio_id: v }))} /></Campo></div>
                 <Campo rotulo="Matrícula no convênio"><input className="campo" value={edicao.matricula ?? ''} onChange={m('matricula')} /></Campo>
+                <div className="sm:col-span-2"><Campo rotulo="Tabela de preço" ajuda="Aplicada automaticamente quando o cliente é identificado no caixa"><Lista valor={edicao.tabela_preco_id ?? null} opcoes={[{ valor: null, texto: 'Varejo (preço normal)' }, ...tabelas.map((t) => ({ valor: t.id, texto: t.nome }))]} onMudar={(v) => gestor && setEdicao((x) => ({ ...x, tabela_preco_id: v }))} /></Campo></div>
               </div>
               {gestor && <label className="mt-3 flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={edicao.bloqueado} onChange={m('bloqueado')} /> Bloquear vendas a prazo para este cliente</label>}
             </fieldset>

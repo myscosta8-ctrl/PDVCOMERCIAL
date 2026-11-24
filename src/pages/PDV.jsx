@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useSessao } from '../lib/sessao.js'
 import { useCaixaAberto } from '../lib/caixa.js'
-import { adicionar, alterarQuantidade, remover, totais, totalItem, paraEnvio, lerCodigo, trocarLote } from '../lib/carrinho.js'
+import { adicionar, alterarQuantidade, remover, totais, totalItem, paraEnvio, lerCodigo, trocarLote, aplicarPrecos } from '../lib/carrinho.js'
+import { EscolherGrade } from '../components/Grade.jsx'
 import { dinheiro, lerNumero, arred } from '../lib/formato.js'
 import { Botao, Campo, Confirmacao, Etiqueta, Icone, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
@@ -51,7 +52,25 @@ export default function PDV() {
   const [salvarPre, setSalvarPre] = useState(false)
   const [preVenda, setPreVenda] = useState(null)
   const [escolhaLote, setEscolhaLote] = useState(null)
+  const [gradeDe, setGradeDe] = useState(null)
+  const [tabelas, setTabelas] = useState([])
+  const [tabelaManual, setTabelaManual] = useState(null)
+  const tabela = tabelaManual ?? cliente?.tabela_preco_id ?? null
   const t = useMemo(() => totais(itens), [itens])
+
+  useEffect(() => {
+    supabase.from('tabelas_preco').select('id, nome, ajuste_percentual').eq('ativo', true).order('nome').then(({ data }) => setTabelas(data ?? []))
+  }, [])
+
+  // Preços vigentes (tabela, promoção, preço por quantidade) calculados pelo banco sempre que a venda muda
+  const chavePrecos = JSON.stringify([tabela, itens.map((i) => [i.produto_id, i.quantidade])])
+  useEffect(() => {
+    if (!itens.length) return
+    let ativo = true
+    supabase.rpc('precos_itens', { p_itens: itens.map((i) => ({ produto_id: i.produto_id, quantidade: i.quantidade })), p_tabela: tabela })
+      .then(({ data }) => { if (ativo && data) setItens((c) => aplicarPrecos(c, data)) })
+    return () => { ativo = false }
+  }, [chavePrecos]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Orçamento ou pedido aberto a partir da tela Orçamentos
   useEffect(() => {
@@ -73,7 +92,7 @@ export default function PDV() {
       setItens(novos)
       setPreVenda(pv)
       if (pv.cliente_id) {
-        const { data: c } = await supabase.from('clientes').select('id, nome, cpf_cnpj, telefone').eq('id', pv.cliente_id).maybeSingle()
+        const { data: c } = await supabase.from('clientes').select('id, nome, cpf_cnpj, telefone, tabela_preco_id').eq('id', pv.cliente_id).maybeSingle()
         if (c) setCliente({ ...c, situacao: await carregarSituacao(c.id) })
       }
       avisar(`${pv.tipo === 'pedido' ? 'Pedido' : 'Orçamento'} nº ${pv.numero} carregado com os preços atuais.${fora.length ? ` Itens indisponíveis: ${fora.join(', ')}.` : ''}`, fora.length ? 'erro' : 'sucesso')
@@ -103,6 +122,7 @@ export default function PDV() {
   }
 
   const incluir = async (p, qtd) => {
+    if (p.e_grade) { setGradeDe({ produto: p, qtd }); return }
     let lote = null
     if (p.controla_lote && !p.e_kit) {
       const lotes = await lotesDisponiveis(p.id)
@@ -124,7 +144,7 @@ export default function PDV() {
     if (!(quantidade > 0)) { avisar('Quantidade inválida.', 'erro'); return }
     const limpo = q.replace(/[%,()]/g, '')
     const soNumeros = /^\d{6,14}$/.test(limpo)
-    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, controla_lote, e_kit').eq('ativo', true).limit(20)
+    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, controla_lote, e_kit, e_grade').eq('ativo', true).limit(20)
     consulta = soNumeros ? consulta.or(`ean.eq.${limpo},codigo.eq.${limpo}`) : consulta.or(`descricao.ilike.%${limpo}%,codigo.eq.${limpo}`)
     const { data, error } = await consulta
     if (error) { avisar(mensagemErro(error), 'erro'); return }
@@ -144,7 +164,7 @@ export default function PDV() {
   }
 
   const concluida = async (r) => {
-    setUltima({ ...r, nfce: null }); setItens([]); setDestaque(null); setPagamentoAberto(false); setCliente(null)
+    setUltima({ ...r, nfce: null }); setItens([]); setDestaque(null); setPagamentoAberto(false); setCliente(null); setTabelaManual(null)
     if (preVenda) {
       await supabase.from('pre_vendas').update({ status: 'convertido', venda_id: r.venda_id }).eq('id', preVenda.id)
       setPreVenda(null)
@@ -237,7 +257,11 @@ export default function PDV() {
                         }}
                       />
                     </td>
-                    <td className="num text-right">{dinheiro(i.preco_unitario)}</td>
+                    <td className="num text-right">
+                      {i.preco_base && i.preco_unitario < i.preco_base && <span className="block text-xs text-tinta-400 line-through">{dinheiro(i.preco_base)}</span>}
+                      {dinheiro(i.preco_unitario)}
+                      {i.preco_nome && i.preco_unitario < (i.preco_base ?? 0) && <span className="block font-sans text-xs text-caixa-600 dark:text-caixa-300">{i.preco_nome}</span>}
+                    </td>
                     <td className="num text-right font-semibold">{dinheiro(totalItem(i))}</td>
                     <td className="text-right">
                       <button className="rounded p-1 text-tinta-400 hover:bg-rubro-50 hover:text-rubro-600" onClick={() => setItens((c) => remover(c, i.chave))} title="Remover item" aria-label={`Remover ${i.descricao}`}>
@@ -291,6 +315,12 @@ export default function PDV() {
         </div>
 
         {preVenda && <p className="text-sm text-tinta-400">Venda originada do {preVenda.tipo === 'pedido' ? 'pedido' : 'orçamento'} nº {preVenda.numero}</p>}
+        {tabelas.length > 0 && (
+          <div className="cartao flex items-center gap-3 px-4 py-2.5">
+            <span className="text-sm text-tinta-400">Tabela de preço</span>
+            <div className="flex-1"><Lista valor={tabela} onMudar={(v) => setTabelaManual(v)} opcoes={[{ valor: null, texto: 'Varejo (preço normal)' }, ...tabelas.map((x) => ({ valor: x.id, texto: x.nome }))]} /></div>
+          </div>
+        )}
         {cliente
           ? <SituacaoCliente cliente={cliente} compacto onRemover={() => setCliente(null)} />
           : <Botao variante="secundario" icone="usuario" className="w-full" onClick={() => setEscolherCliente(true)}>Identificar cliente (F3)</Botao>}
@@ -367,6 +397,8 @@ export default function PDV() {
         )}
       </TelaSuspensa>
 
+      {gradeDe && <EscolherGrade modelo={gradeDe.produto} onFechar={() => setGradeDe(null)} onEscolher={(v) => { const q = gradeDe.qtd; setGradeDe(null); incluir(v, q); busca.current?.focus() }} />}
+
       <SeletorCliente aberta={escolherCliente} onFechar={() => setEscolherCliente(false)} onEscolher={(c) => { setCliente(c); setEscolherCliente(false); busca.current?.focus() }} />
 
       {salvarPre && (
@@ -375,13 +407,13 @@ export default function PDV() {
       )}
 
       {pagamentoAberto && (
-        <Pagamento caixa={caixa} itens={itens} cliente={cliente} onFechar={() => setPagamentoAberto(false)} onConcluir={concluida} />
+        <Pagamento caixa={caixa} itens={itens} cliente={cliente} tabela={tabela} onFechar={() => setPagamentoAberto(false)} onConcluir={concluida} />
       )}
     </div>
   )
 }
 
-function Pagamento({ caixa, itens, cliente, onFechar, onConcluir }) {
+function Pagamento({ caixa, itens, cliente, tabela, onFechar, onConcluir }) {
   const avisar = useAviso()
   const [desconto, setDesconto] = useState('')
   const [cpf, setCpf] = useState('')
@@ -442,6 +474,7 @@ function Pagamento({ caixa, itens, cliente, onFechar, onConcluir }) {
       p_pagamentos: pagamentos,
       p_desconto: desc,
       p_cliente: cliente?.id ?? null,
+      p_tabela: tabela,
       p_cpf: cpf.replace(/\D/g, '') || null,
     })
     setEnviando(false)

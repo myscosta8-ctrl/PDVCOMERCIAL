@@ -23,7 +23,7 @@ export function SeletorCliente({ aberta, onFechar, onEscolher, titulo = 'Identif
     if (!t) return
     setBuscando(true)
     const digitos = t.replace(/\D/g, '')
-    let q = supabase.from('clientes').select('id, nome, cpf_cnpj, telefone, limite_credito, bloqueado, convenio:convenios(nome)').eq('ativo', true).order('nome').limit(30)
+    let q = supabase.from('clientes').select('id, nome, cpf_cnpj, telefone, limite_credito, bloqueado, tabela_preco_id, convenio:convenios(nome)').eq('ativo', true).order('nome').limit(30)
     q = digitos.length >= 3 ? q.or(`cpf_cnpj.ilike.%${digitos}%,telefone.ilike.%${digitos}%,nome.ilike.%${t}%`) : q.ilike('nome', `%${t}%`)
     const { data, error } = await q
     setBuscando(false)
