@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { NotasNfce } from './fiscal/NotasNfce.jsx'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useSessao } from '../lib/sessao.js'
 import { dinheiro, lerNumero } from '../lib/formato.js'
@@ -50,14 +51,14 @@ export default function Fiscal() {
   useEffect(() => { carregarEmpresa() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="mx-auto max-w-7xl">
-      <Cabecalho titulo="Fiscal" descricao="Regras de tributação dos produtos e arquivo do SPED Fiscal" />
+      <Cabecalho titulo="Fiscal" descricao="NFC-e, regras de tributação dos produtos e arquivo do SPED Fiscal" />
       <div className="mb-4 inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
-        {[['regras', 'Regras de tributação'], ['sped', 'SPED Fiscal']].map(([id, nome]) => (
+        {[['regras', 'Regras de tributação'], ['nfce', 'NFC-e: contingência e inutilização'], ['sped', 'SPED Fiscal']].map(([id, nome]) => (
           <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
         ))}
       </div>
-      {!empresa ? <p className="text-sm text-tinta-400">Carregando…</p> : aba === 'regras' ? <Regras empresa={empresa} /> : <Sped empresa={empresa} recarregar={carregarEmpresa} />}
+      {!empresa ? <p className="text-sm text-tinta-400">Carregando…</p> : aba === 'regras' ? <Regras empresa={empresa} /> : aba === 'nfce' ? <NotasNfce empresa={empresa} /> : <Sped empresa={empresa} recarregar={carregarEmpresa} />}
     </div>
   )
 }
@@ -318,8 +319,10 @@ function Sped({ empresa, recarregar }) {
       nfce.push(...(data ?? []))
       if (!data || data.length < 500) break
     }
+    const { data: inutilizadas } = await supabase.from('nfce_inutilizacoes').select('serie, inicio, fim').eq('ambiente', 1)
+      .gte('criado_em', `${op.inicio}T00:00:00-03:00`).lte('criado_em', `${op.fim}T23:59:59-03:00`)
     try {
-      const r = gerarSped(dados, nfce, { inicio: op.inicio, fim: op.fim, finalidade: op.finalidade, saldoCredorAnterior: saldo, vencimentoIcms: op.vencimento,
+      const r = gerarSped(dados, nfce, { inicio: op.inicio, fim: op.fim, finalidade: op.finalidade, saldoCredorAnterior: saldo, vencimentoIcms: op.vencimento, inutilizadas: inutilizadas ?? [],
         inventario: op.inventario ? { data: op.dataInv, motivo: op.motivo, conta: op.conta.trim() } : null })
       setResultado({ ...r, nome: `SPED_EFD_${String(empresa.cnpj ?? '').replace(/\D/g, '')}_${op.inicio.slice(0, 7).replace('-', '')}.txt` })
     } catch (e) { avisar(e.message || 'Não foi possível gerar o arquivo.', 'erro') }

@@ -12,6 +12,8 @@ const SERVICOS = {
   autorizacao: { caminho: "NfeAutorizacao/NFeAutorizacao4.asmx", wsdl: "NFeAutorizacao4" },
   status: { caminho: "NfeStatusServico/NfeStatusServico4.asmx", wsdl: "NFeStatusServico4" },
   evento: { caminho: "recepcaoevento/recepcaoevento4.asmx", wsdl: "NFeRecepcaoEvento4" },
+  inutilizacao: { caminho: "nfeinutilizacao/nfeinutilizacao4.asmx", wsdl: "NFeInutilizacao4" },
+  consulta: { caminho: "NfeConsulta/NfeConsulta4.asmx", wsdl: "NFeConsultaProtocolo4" },
 } as const;
 
 // UFs cuja NFC-e é autorizada pela SVRS (ampliar conforme novos clientes)

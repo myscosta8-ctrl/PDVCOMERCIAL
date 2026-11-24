@@ -223,7 +223,10 @@ export default function PDV() {
       if (crediario || (imp.automatica && imp.comprovante)) await comprovante()
       return
     }
-    setUltima((u) => ({ ...u, nfce: 'autorizada', nfceNumero: n.dados.numero }))
+    const emContingencia = n.dados.status === 'contingencia'
+    if (emContingencia) avisar(`SEFAZ sem resposta: NFC-e nº ${n.dados.numero} emitida em contingência. Entregue a via do consumidor; a nota é transmitida sozinha depois.`, 'erro')
+    setUltima((u) => ({ ...u, nfce: emContingencia ? 'contingencia' : 'autorizada', nfceNumero: n.dados.numero }))
+    window.dispatchEvent(new Event('nfce:atualizar'))
     if (imp.automatica) {
       const x = await imprimirDanfe(r.venda_id)
       if (x.erro) avisar(x.erro, 'erro')
@@ -232,7 +235,7 @@ export default function PDV() {
   }
 
   const reimprimir = async () => {
-    const x = ultima.nfce === 'autorizada' ? await imprimirDanfe(ultima.venda_id) : await imprimirComprovanteVenda(ultima.venda_id)
+    const x = ['autorizada', 'contingencia'].includes(ultima.nfce) ? await imprimirDanfe(ultima.venda_id) : await imprimirComprovanteVenda(ultima.venda_id)
     if (x.erro) avisar(x.erro, 'erro')
   }
 
@@ -396,8 +399,10 @@ export default function PDV() {
             {ultima.nfce === 'erro' && <p className="mt-2 text-sm text-rubro-600">NFC-e não emitida: {ultima.nfceErro} Reenvie pela tela Vendas.</p>}
             {ultima.nfce !== 'emitindo' && (
               <div className="mt-2 flex items-center justify-between gap-2">
-                {ultima.nfce === 'autorizada' ? <Etiqueta tom="positivo">NFC-e nº {ultima.nfceNumero} autorizada</Etiqueta> : <span className="text-sm text-tinta-400">Comprovante não fiscal</span>}
-                <button className="flex items-center gap-1 text-sm font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={reimprimir}><Icone nome="impressora" className="h-4 w-4" />{ultima.nfce === 'autorizada' ? 'Reimprimir DANFE' : 'Imprimir comprovante'}</button>
+                {ultima.nfce === 'autorizada' ? <Etiqueta tom="positivo">NFC-e nº {ultima.nfceNumero} autorizada</Etiqueta>
+                  : ultima.nfce === 'contingencia' ? <Etiqueta tom="alerta">NFC-e nº {ultima.nfceNumero} em contingência</Etiqueta>
+                  : <span className="text-sm text-tinta-400">Comprovante não fiscal</span>}
+                <button className="flex items-center gap-1 text-sm font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={reimprimir}><Icone nome="impressora" className="h-4 w-4" />{['autorizada', 'contingencia'].includes(ultima.nfce) ? 'Reimprimir DANFE' : 'Imprimir comprovante'}</button>
               </div>
             )}
           </div>

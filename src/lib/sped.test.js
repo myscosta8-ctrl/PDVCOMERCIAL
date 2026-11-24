@@ -27,7 +27,7 @@ const nfce = [
   { numero: 10, serie: 1, chave: '15261012345678000195650010000000101123456780', status: 'autorizada', emitida_em: '2026-10-10T23:30:00Z', xml_autorizado: nfceXml },
   { numero: 11, serie: 1, chave: '15261012345678000195650010000000111123456781', status: 'cancelada', emitida_em: '2026-10-11T12:00:00Z' },
 ]
-const op = { inicio: '2026-10-01', fim: '2026-10-31', finalidade: '0', saldoCredorAnterior: 0, vencimentoIcms: '2026-11-10', inventario: { data: '2026-10-31', motivo: '01', conta: '1.1.4.01' } }
+const op = { inutilizadas: [{ serie: 1, inicio: 12, fim: 13 }], inicio: '2026-10-01', fim: '2026-10-31', finalidade: '0', saldoCredorAnterior: 0, vencimentoIcms: '2026-11-10', inventario: { data: '2026-10-31', motivo: '01', conta: '1.1.4.01' } }
 
 const QTD_CAMPOS = { '0000': 15, '0005': 10, '0100': 14, '0150': 13, '0190': 3, '0200': 13, C100: 29, C170: 38, C190: 12, E110: 15, E116: 10, H005: 4, H010: 11, 1010: 14 }
 
@@ -56,6 +56,7 @@ describe('SPED Fiscal', () => {
     const c190Entrada = campos.find((c) => c[0] === 'C190')
     expect(c190Entrada[4]).toBe('105,00') // frete entra no valor da operação
     expect(campos.filter((c) => c[0] === 'C100' && c[5] === '02')).toHaveLength(1)
+    expect(campos.filter((c) => c[0] === 'C100' && c[5] === '05').map((c) => c[7])).toEqual(['12', '13'])
     expect(resumo).toMatchObject({ debito: 17.1, credito: 12, recolher: 5.1 })
     expect(campos.find((c) => c[0] === 'E116')[2]).toBe('5,10')
     expect(campos.find((c) => c[0] === 'H005')[2]).toBe('40,00')

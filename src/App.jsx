@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BotaoAlertas } from './components/Alertas.jsx'
+import { NfcePendentes } from './components/NfcePendentes.jsx'
 import { SessaoCtx, useSessao } from './lib/sessao.js'
 import { supabase, configurado, mensagemErro } from './lib/supabase.js'
 import { useCaixaAberto } from './lib/caixa.js'
@@ -197,6 +198,7 @@ function BarraSituacao({ irPara }) {
         <Icone nome="nota" className="h-4 w-4" />
         {!nfceAtiva ? 'NFC-e não configurada' : homolog ? 'NFC-e em homologação, sem valor fiscal' : 'NFC-e em produção'}
       </span>
+      <NfcePendentes ativa={nfceAtiva} irPara={irPara} podeAbrir={perfil.papel !== 'operador'} />
       <span className="ml-auto"><BotaoAlertas irPara={irPara} /></span>
       <span className={`flex items-center gap-2 ${online ? 'text-tinta-400' : 'font-semibold text-rubro-600'}`}>
         <span className={`h-2 w-2 rounded-full ${online ? 'bg-caixa-500' : 'bg-rubro-600'}`} />

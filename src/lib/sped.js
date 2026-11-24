@@ -156,6 +156,14 @@ export function gerarSped(dados, nfce, op) {
     nSaidas++
   }
 
+  // Numeração inutilizada no período: um C100 por número, só com a identificação
+  for (const i of op.inutilizadas ?? []) {
+    for (let n = Number(i.inicio); n <= Number(i.fim); n++) {
+      C('C100', '1', '0', '', '65', '05', String(i.serie), String(n), '', ...Array(20).fill(''))
+      nSaidas++
+    }
+  }
+
   // ---------------- Bloco 0
   const inv = op.inventario?.data ? op.inventario : null
   if (inv) for (const i of dados.inventario) itensUsados.add(i.cod_item)

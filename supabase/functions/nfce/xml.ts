@@ -29,6 +29,8 @@ export interface DadosNota {
   emitente: Emitente; ambiente: 1 | 2; serie: number; numero: number; codigo_numerico: string;
   emissao: Date; itens: ItemNota[]; pagamentos: PagamentoNota[]; troco: number;
   cpf_cnpj_consumidor?: string | null; informacoes?: string | null;
+  // Contingência off-line (tpEmis = 9): início da contingência e motivo, impressos no DANFE
+  contingencia?: { inicio: Date; justificativa: string } | null;
 }
 
 // Texto seguro para XML (forma canônica)
@@ -79,7 +81,9 @@ export function montarChave(d: DadosNota, tpEmis = 1) {
 const T_PAG: Record<string, string> = { dinheiro: "01", credito: "03", debito: "04", crediario: "05", pix: "17", outro: "99" };
 
 export function montarInfNFe(d: DadosNota) {
-  const { chave, dv, cUF } = montarChave(d);
+  const tpEmis = d.contingencia ? 9 : 1;
+  const { chave, dv, cUF } = montarChave(d, tpEmis);
+  if (d.contingencia && txt(d.contingencia.justificativa, 256).length < 15) throw new Error("Justificativa da contingência com menos de 15 letras.");
   const e = d.emitente;
   const homolog = d.ambiente === 2;
 
@@ -87,9 +91,10 @@ export function montarInfNFe(d: DadosNota) {
     tag("cUF", cUF) + tag("cNF", d.codigo_numerico.padStart(8, "0")) + tag("natOp", "VENDA") +
     tag("mod", "65") + tag("serie", String(d.serie)) + tag("nNF", String(d.numero)) +
     tag("dhEmi", dataHoraBrasilia(d.emissao)) + tag("tpNF", "1") + tag("idDest", "1") +
-    tag("cMunFG", so(e.municipio_ibge)) + tag("tpImp", "4") + tag("tpEmis", "1") + tag("cDV", String(dv)) +
+    tag("cMunFG", so(e.municipio_ibge)) + tag("tpImp", "4") + tag("tpEmis", String(tpEmis)) + tag("cDV", String(dv)) +
     tag("tpAmb", String(d.ambiente)) + tag("finNFe", "1") + tag("indFinal", "1") + tag("indPres", "1") +
-    tag("procEmi", "0") + tag("verProc", "PDV Comercial 1.0");
+    tag("procEmi", "0") + tag("verProc", "PDV Comercial 1.0") +
+    (d.contingencia ? tag("dhCont", dataHoraBrasilia(d.contingencia.inicio)) + tag("xJust", txt(d.contingencia.justificativa, 256)) : "");
 
   const fone = so(e.endereco.fone);
   const emit =
@@ -187,7 +192,7 @@ export function montarInfNFe(d: DadosNota) {
 
   // Atributos em ordem canônica: Id antes de versao
   const infNFe = `<infNFe Id="NFe${chave}" versao="4.00">${corpo}</infNFe>`;
-  return { chave, infNFe, vNF, vProd, vDesc };
+  return { chave, infNFe, vNF, vProd, vDesc, documento: dest ? doc : null };
 }
 
 // Distribui o desconto da venda entre os itens (proporcional; sobra no maior item)

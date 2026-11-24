@@ -28,7 +28,7 @@ export function lerPfx(pfxBase64: string, senha: string): Certificado {
   const privada = chaves[0]?.key as forge.pki.rsa.PrivateKey | undefined;
   if (!privada) throw new Error("O certificado não contém a chave privada.");
   // Certificado do titular = o que corresponde à chave privada
-  const titularBag = certs.find((b) => {
+  const titularBag = certs.find((b: forge.pkcs12.Bag) => {
     const pub = b.cert?.publicKey as forge.pki.rsa.PublicKey | undefined;
     return pub && pub.n.equals(privada.n);
   }) ?? certs[0];
@@ -78,4 +78,11 @@ export function assinar(elemento: string, nomeTag: string, id: string, cert: Cer
   return `<Signature xmlns="${NS_DSIG}"><SignedInfo>${signedInfoCorpo}</SignedInfo>` +
     `<SignatureValue>${valor}</SignatureValue>` +
     `<KeyInfo><X509Data><X509Certificate>${cert.certBase64}</X509Certificate></X509Data></KeyInfo></Signature>`;
+}
+
+// Assinatura RSA-SHA1 de um texto qualquer, em base64 (QR Code versão 3 da contingência)
+export function assinarTexto(texto: string, cert: Certificado): string {
+  const md = forge.md.sha1.create();
+  md.update(texto, "utf8");
+  return forge.util.encode64(cert.privada.sign(md));
 }

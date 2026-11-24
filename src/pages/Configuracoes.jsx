@@ -168,6 +168,8 @@ export default function Configuracoes() {
           <Campo rotulo="ID do CSC"><input className="campo" inputMode="numeric" value={emp.nfce_csc_id ?? ''} onChange={m('nfce_csc_id')} placeholder="ex.: 000001" /></Campo>
           <div className="sm:col-span-2"><Campo rotulo="Endereço do QR Code (homologação)"><input className="campo" value={emp.nfce_url_qrcode ?? ''} onChange={m('nfce_url_qrcode')} /></Campo></div>
           <div className="sm:col-span-2"><Campo rotulo="Endereço de consulta pela chave"><input className="campo" value={emp.nfce_url_consulta ?? ''} onChange={m('nfce_url_consulta')} /></Campo></div>
+          <label className="flex items-start gap-2 sm:col-span-4"><input type="checkbox" className="mt-1 h-4 w-4 accent-caixa-600" checked={emp.nfce_contingencia !== false} onChange={(e) => setEmp((x) => ({ ...x, nfce_contingencia: e.target.checked }))} />
+            <span>Emitir em contingência quando a SEFAZ não responder<span className="block text-sm text-tinta-400">A venda não para: sai o DANFE em duas vias e a nota é transmitida sozinha quando a conexão voltar (prazo de 24 horas).</span></span></label>
         </div>
         <div className="flex justify-end"><Botao onClick={salvarEmpresa} carregando={salvando === 'empresa'}>Salvar dados</Botao></div>
       </section>

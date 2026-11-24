@@ -30,10 +30,11 @@ const PRODUTOS = [
     P(`pv${i}`, `Meia esportiva cano médio ${c} ${t}`, `78900000100${i}`, 19.9, 7.5, e, 2, { produto_pai_id: 'p9', atributos: { tamanho: t, cor: c }, controla_lote: false, ncm: '61159500' })),
 ]
 const VENDAS = [
+  { id: 'v8', numero: 1049, subtotal: 42.5, desconto: 0, total: 42.5, troco: 7.5, status: 'concluida', criado_em: h(17, 5), operador: { nome: 'Ana Ribeiro' }, pagamentos: [{ forma: 'dinheiro', valor: 50 }], notas: [{ numero: 313, status: 'contingencia' }] },
   { id: 'v7', numero: 1048, subtotal: 89.7, desconto: 0, total: 89.7, troco: 10.3, status: 'concluida', criado_em: h(16, 42), operador: { nome: 'Ana Ribeiro' }, pagamentos: [{ forma: 'dinheiro', valor: 100 }], notas: [{ numero: 312, status: 'autorizada' }] },
   { id: 'v6', numero: 1047, subtotal: 25.8, desconto: 0, total: 25.8, troco: 0, status: 'concluida', criado_em: h(16, 5), operador: { nome: 'Ana Ribeiro' }, pagamentos: [{ forma: 'pix', valor: 25.8 }], notas: [{ numero: 311, status: 'rejeitada' }] },
   { id: 'v5', numero: 1046, subtotal: 114.8, desconto: 4.8, total: 110, troco: 0, status: 'concluida', criado_em: h(15, 31), operador: { nome: 'Carlos Lima' }, pagamentos: [{ forma: 'credito', valor: 110 }], notas: [{ numero: 310, status: 'autorizada' }] },
-  { id: 'v4', numero: 1045, subtotal: 18.4, desconto: 0, total: 18.4, troco: 0, status: 'cancelada', criado_em: h(14, 12), operador: { nome: 'Ana Ribeiro' }, motivo_cancelamento: 'Cliente desistiu da compra no caixa', pagamentos: [{ forma: 'debito', valor: 18.4 }], notas: [] },
+  { id: 'v4', numero: 1045, subtotal: 18.4, desconto: 0, total: 18.4, troco: 0, status: 'cancelada', criado_em: h(14, 12), operador: { nome: 'Ana Ribeiro' }, motivo_cancelamento: 'Cliente desistiu da compra no caixa', pagamentos: [{ forma: 'debito', valor: 18.4 }], notas: [{ numero: 307, status: 'cancelada' }] },
   { id: 'v3', numero: 1044, subtotal: 66.8, desconto: 0, total: 66.8, troco: 0, status: 'concluida', criado_em: h(11, 48), operador: { nome: 'Carlos Lima' }, pagamentos: [{ forma: 'pix', valor: 40 }, { forma: 'debito', valor: 26.8 }], notas: [{ numero: 309, status: 'autorizada' }] },
   { id: 'v2', numero: 1043, subtotal: 13.8, desconto: 0, total: 13.8, troco: 6.2, status: 'concluida', criado_em: h(9, 20), operador: { nome: 'Ana Ribeiro' }, pagamentos: [{ forma: 'dinheiro', valor: 20 }], notas: [{ numero: 308, status: 'autorizada' }] },
 ]
@@ -222,7 +223,13 @@ const TABELAS = {
     { id: 'rc2', tipo: 'antimicrobiano', numero: null, data_emissao: '2026-11-22', prescritor_nome: 'Dr. Paulo Lima', prescritor_conselho: 'CRM', prescritor_numero: '10231', prescritor_uf: 'PA', paciente_nome: 'Pedro Santos', paciente_idade: 8, paciente_sexo: 'M', comprador_nome: 'Raimundo Pereira', comprador_documento: '98765432100', criado_em: '2026-11-22T15:40:00Z', venda: { numero: 1031, status: 'concluida' }, itens: [{ quantidade: 1, produto: { descricao: 'Amoxicilina 250 mg/5 ml, suspensão 150 ml' }, lote: { numero: 'AMX2609', validade: '2027-09-30' } }] },
     { id: 'rc3', tipo: 'controle_especial', numero: null, data_emissao: '2026-11-18', prescritor_nome: 'Dra. Helena Souza', prescritor_conselho: 'CRM', prescritor_numero: '8812', prescritor_uf: 'PA', paciente_nome: 'Luciana Farias', comprador_nome: 'Luciana Farias', comprador_documento: '45678912300', criado_em: '2026-11-18T13:05:00Z', venda: { numero: 1012, status: 'concluida' }, itens: [{ quantidade: 2, produto: { descricao: 'Sertralina 50 mg, 30 comprimidos' }, lote: null }] },
   ],
-  nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
+  nfce_documentos: [
+    { id: 'nd1', venda_id: 'v7', numero: 312, serie: 1, status: 'autorizada', ambiente: 2, emitida_em: h(16, 42), chave: '15261112345678000195650010000003121123456788' },
+    { id: 'nd2', venda_id: 'v8', numero: 313, serie: 1, status: 'contingencia', ambiente: 2, dh_contingencia: h(17, 5), criado_em: h(17, 5), motivo: 'Emitida em contingência; será transmitida quando a SEFAZ responder.', venda: { numero: 1049, total: 42.5 } },
+    { id: 'nd3', venda_id: 'v4', numero: 307, serie: 1, status: 'cancelada', ambiente: 2, cancelada_em: h(14, 20), protocolo_cancelamento: '315260000098765', justificativa_cancelamento: 'Cliente desistiu da compra no caixa', venda: { numero: 1045, total: 18.4 } },
+    { id: 'nd4', venda_id: 'v6', numero: 311, serie: 1, status: 'rejeitada', ambiente: 2, codigo_status: '778', motivo: 'Rejeição: Informado NCM inexistente' },
+  ],
+  nfce_inutilizacoes: [{ id: 'i1', serie: 1, inicio: 290, fim: 291, criado_em: '2026-11-10T14:00:00Z', protocolo: '315260000054321', justificativa: 'Numeração pulada por falha do sistema emissor' }],
 }
 // Valores por conta e mês com variação estável (mesma semente, mesmo número)
 function relatorioDemo({ p_inicio, p_fim }) {
@@ -244,6 +251,10 @@ function relatorioDemo({ p_inicio, p_fim }) {
 
 const RPC = {
   gerar_despesas_fixas: 0,
+  numeros_nfce_sem_nota: { ambiente: 2, serie: 1, ultimo: 313, faixas: [
+    { inicio: 305, fim: 306, qtd: 2, situacao: 'sem_nota' },
+    { inicio: 311, fim: 311, qtd: 1, situacao: 'rejeitada', venda_numero: 1047, pode_reenviar: true },
+  ] },
   historico_financeiro: [
     { id: 9, acao: 'pagou', quando: h(10, 12), usuario: 'Carlos Lima', descricao: 'Aluguel da loja', tipo: 'pagar', valor: 1000, detalhes: { data: dIso(-2), forma: 'pix', juros: 0, desconto: 0 } },
     { id: 8, acao: 'editou', quando: h(9, 40), usuario: 'Brenda Souza', descricao: 'Energia elétrica', tipo: 'pagar', valor: 486.32, detalhes: { antes: { valor: 480 }, depois: { valor: 486.32 } } },
@@ -335,7 +346,7 @@ function consulta(tabela) {
   let linhas = [...(TABELAS[tabela] ?? [])]
   let unico = false
   const q = {
-    select: () => q, not: () => q, range: () => q, lte: () => q, order: () => q, limit: () => q, gte: () => q, lt: () => q, in: () => q, ilike: () => q,
+    select: () => q, not: () => q, range: () => q, lte: () => q, order: () => q, limit: () => q, gte: () => q, lt: () => q, in: (campo, vals) => { linhas = linhas.filter((l) => !(campo in l) || vals.includes(l[campo])); return q }, ilike: () => q,
     or: (expr) => {
       const conds = expr.split(',').map((c) => c.split('.'))
       linhas = linhas.filter((l) => conds.some(([campo, op, ...v]) => {
@@ -350,7 +361,7 @@ function consulta(tabela) {
     insert: () => q, update: () => q,
     single: () => { unico = true; return q },
     maybeSingle: () => { unico = true; return q },
-    then: (ok) => ok({ data: unico ? linhas[0] ?? null : linhas, error: null }),
+    then: (ok) => ok({ data: unico ? linhas[0] ?? null : linhas, count: linhas.length, error: null }),
   }
   return q
 }
@@ -376,7 +387,7 @@ export const clienteDemo = {
     if (nome === 'relatorio_contas') return { data: relatorioDemo(args), error: null }
     return { data: RPC[nome] ?? null, error: null }
   },
-  functions: { invoke: async () => ({ data: { titular: EMP.certificado_titular, validade: EMP.certificado_validade, sefaz: { codigo: '107', mensagem: 'Serviço em Operação' } }, error: null }) },
+  functions: { invoke: async (_n, { body } = {}) => body?.acao === 'transmitir' ? { data: { autorizadas: 0, rejeitadas: 0, sem_comunicacao: true, mensagens: [] }, error: null } : ({ data: { titular: EMP.certificado_titular, validade: EMP.certificado_validade, sefaz: { codigo: '107', mensagem: 'Serviço em Operação' } }, error: null }) },
 }
 
 export const criarCliente = () => clienteDemo

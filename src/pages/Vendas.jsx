@@ -12,10 +12,12 @@ import { SeletorCliente } from '../components/Clientes.jsx'
 
 
 function situacaoNota(notas) {
-  const n = notas?.find((x) => x.status === 'autorizada') ?? notas?.[0]
+  const n = notas?.find((x) => ['autorizada', 'contingencia', 'cancelada'].includes(x.status)) ?? notas?.[0]
   if (!n) return { tom: 'neutro', texto: 'Sem NFC-e' }
   if (n.status === 'autorizada') return { tom: 'positivo', texto: `NFC-e ${n.numero}` }
   if (n.status === 'rejeitada') return { tom: 'critico', texto: 'NFC-e rejeitada' }
+  if (n.status === 'contingencia') return { tom: 'alerta', texto: `NFC-e ${n.numero} em contingência` }
+  if (n.status === 'cancelada') return { tom: 'neutro', texto: `NFC-e ${n.numero} cancelada` }
   return { tom: 'alerta', texto: 'NFC-e pendente' }
 }
 
@@ -50,9 +52,10 @@ export default function Vendas() {
   const abrir = async (v) => {
     const [itens, notas] = await Promise.all([
       supabase.from('venda_itens').select('id, sequencia, descricao, quantidade, quantidade_devolvida, preco_unitario, desconto, total').eq('venda_id', v.id).order('sequencia'),
-      supabase.from('nfce_documentos').select('numero, serie, status, codigo_status, motivo, ambiente, chave').eq('venda_id', v.id).order('criado_em', { ascending: false }).limit(1),
+      supabase.from('nfce_documentos').select('numero, serie, status, codigo_status, motivo, ambiente, chave, emitida_em, protocolo_cancelamento, justificativa_cancelamento, cancelada_em').eq('venda_id', v.id).order('criado_em', { ascending: false }),
     ])
-    setDetalhe({ ...v, itens: itens.data ?? [], nfce: notas.data?.[0] ?? null })
+    const lista = notas.data ?? []
+    setDetalhe({ ...v, itens: itens.data ?? [], nfce: lista.find((n) => ['autorizada', 'contingencia', 'cancelada'].includes(n.status)) ?? lista[0] ?? null })
   }
 
   const emitir = async () => {
@@ -60,16 +63,30 @@ export default function Vendas() {
     const r = await chamarNfce({ acao: 'emitir', venda_id: detalhe.id })
     setEmitindo(false)
     if (r.erro) avisar(r.erro, 'erro')
-    else { avisar(`NFC-e nº ${r.dados.numero} autorizada.`); await imprimirDanfe(detalhe.id) }
+    else {
+      avisar(r.dados.status === 'contingencia' ? `SEFAZ sem resposta: NFC-e nº ${r.dados.numero} emitida em contingência. Será transmitida depois.` : `NFC-e nº ${r.dados.numero} autorizada.`, r.dados.status === 'contingencia' ? 'erro' : undefined)
+      const x = await imprimirDanfe(detalhe.id); if (x.erro) avisar(x.erro, 'erro')
+    }
     abrir(detalhe); carregar()
   }
 
+  const comNota = cancelando?.nfce?.status === 'autorizada'
+  const minutosNota = comNota && cancelando.nfce.emitida_em ? Math.floor((Date.now() - new Date(cancelando.nfce.emitida_em)) / 60000) : 0
   const cancelar = async () => {
     setEnviando(true)
-    const { error } = await supabase.rpc('cancelar_venda', { p_venda: cancelando.id, p_motivo: motivo })
-    setEnviando(false)
-    if (error) { avisar(mensagemErro(error), 'erro'); return }
-    avisar(`Venda nº ${cancelando.numero} cancelada. Os itens voltaram ao estoque.`)
+    if (comNota) {
+      // Primeiro a SEFAZ cancela a nota; depois o servidor cancela a venda e devolve o estoque
+      const r = await chamarNfce({ acao: 'cancelar', venda_id: cancelando.id, justificativa: motivo })
+      setEnviando(false)
+      if (r.erro) { avisar(r.erro, 'erro'); return }
+      if (r.dados.aviso) avisar(r.dados.aviso, 'erro')
+      else avisar(`NFC-e nº ${cancelando.nfce.numero} e venda nº ${cancelando.numero} canceladas. Os itens voltaram ao estoque.`)
+    } else {
+      const { error } = await supabase.rpc('cancelar_venda', { p_venda: cancelando.id, p_motivo: motivo })
+      setEnviando(false)
+      if (error) { avisar(mensagemErro(error), 'erro'); return }
+      avisar(`Venda nº ${cancelando.numero} cancelada. Os itens voltaram ao estoque.`)
+    }
     setCancelando(null); setDetalhe(null); setMotivo('')
     carregar()
   }
@@ -134,9 +151,10 @@ export default function Vendas() {
           <Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>
           <Botao variante="secundario" icone="impressora" onClick={async () => { const x = await imprimirComprovanteVenda(detalhe.id); if (x.erro) avisar(x.erro, 'erro') }}>Comprovante</Botao>
           {detalhe?.status === 'concluida' && perfil.papel !== 'operador' && detalhe.itens.some((i) => Number(i.quantidade) > Number(i.quantidade_devolvida)) && <Botao variante="secundario" onClick={() => setDevolvendo(detalhe)}>Devolução ou troca</Botao>}
-          {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao variante="perigo" onClick={() => setCancelando(detalhe)}>Cancelar venda</Botao>}
-          {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao icone="nota" onClick={emitir} carregando={emitindo}>{detalhe?.nfce ? 'Reenviar NFC-e' : 'Emitir NFC-e'}</Botao>}
-          {detalhe?.nfce?.status === 'autorizada' && <Botao icone="impressora" onClick={() => imprimirDanfe(detalhe.id)}>Imprimir DANFE NFC-e</Botao>}
+          {detalhe?.status === 'concluida' && perfil.papel !== 'operador' && !['contingencia', 'pendente'].includes(detalhe?.nfce?.status) && (
+            <Botao variante="perigo" onClick={() => setCancelando(detalhe)}>{detalhe?.nfce?.status === 'autorizada' ? 'Cancelar NFC-e e venda' : 'Cancelar venda'}</Botao>)}
+          {detalhe?.status === 'concluida' && !['autorizada', 'contingencia', 'cancelada'].includes(detalhe?.nfce?.status) && <Botao icone="nota" onClick={emitir} carregando={emitindo}>{detalhe?.nfce ? 'Reenviar NFC-e' : 'Emitir NFC-e'}</Botao>}
+          {['autorizada', 'contingencia'].includes(detalhe?.nfce?.status) && <Botao icone="impressora" onClick={async () => { const x = await imprimirDanfe(detalhe.id); if (x.erro) avisar(x.erro, 'erro') }}>Imprimir DANFE NFC-e</Botao>}
         </>}
       >
         {detalhe && (
@@ -173,10 +191,12 @@ export default function Vendas() {
               {!detalhe.nfce && <span className="text-tinta-600 dark:text-tinta-300">NFC-e ainda não emitida para esta venda.</span>}
               {detalhe.nfce && (
                 <span className="flex-1">
-                  <Etiqueta tom={detalhe.nfce.status === 'autorizada' ? 'positivo' : detalhe.nfce.status === 'rejeitada' ? 'critico' : 'alerta'}>
-                    NFC-e nº {detalhe.nfce.numero}, {detalhe.nfce.status}{detalhe.nfce.ambiente === 2 ? ' em homologação' : ''}
+                  <Etiqueta tom={{ autorizada: 'positivo', rejeitada: 'critico', cancelada: 'neutro' }[detalhe.nfce.status] ?? 'alerta'}>
+                    NFC-e nº {detalhe.nfce.numero}, {{ contingencia: 'em contingência', pendente: 'sem resposta da SEFAZ' }[detalhe.nfce.status] ?? detalhe.nfce.status}{detalhe.nfce.ambiente === 2 ? ' em homologação' : ''}
                   </Etiqueta>
-                  {detalhe.nfce.motivo && detalhe.nfce.status !== 'autorizada' && <span className="mt-1 block text-sm text-rubro-600">{detalhe.nfce.codigo_status} {detalhe.nfce.motivo}</span>}
+                  {detalhe.nfce.status === 'contingencia' && <span className="mt-1 block text-sm text-tinta-400">Emitida sem a SEFAZ. É transmitida sozinha quando a conexão voltar (prazo de 24 horas). Para cancelar, espere a autorização.</span>}
+                  {detalhe.nfce.status === 'cancelada' && <span className="mt-1 block text-sm text-tinta-400">Cancelada em {dataHora(detalhe.nfce.cancelada_em)}, protocolo {detalhe.nfce.protocolo_cancelamento}. {detalhe.nfce.justificativa_cancelamento}</span>}
+                  {detalhe.nfce.motivo && ['rejeitada', 'pendente'].includes(detalhe.nfce.status) && <span className="mt-1 block text-sm text-rubro-600">{detalhe.nfce.codigo_status} {detalhe.nfce.motivo}</span>}
                 </span>
               )}
             </div>
@@ -191,14 +211,22 @@ export default function Vendas() {
 
       <TelaSuspensa
         aberta={!!cancelando}
-        titulo={`Cancelar venda nº ${cancelando?.numero ?? ''}`}
-        subtitulo="Os itens voltam ao estoque e a operação fica registrada na auditoria."
+        titulo={comNota ? `Cancelar NFC-e nº ${cancelando?.nfce?.numero} e venda nº ${cancelando?.numero}` : `Cancelar venda nº ${cancelando?.numero ?? ''}`}
+        subtitulo={comNota ? 'O cancelamento vai primeiro para a SEFAZ; depois os itens voltam ao estoque.' : 'Os itens voltam ao estoque e a operação fica registrada na auditoria.'}
         onFechar={() => setCancelando(null)}
         rodape={<>
           <Botao variante="secundario" onClick={() => setCancelando(null)}>Voltar</Botao>
-          <Botao variante="perigo" onClick={cancelar} carregando={enviando} disabled={motivo.trim().length < 15}>Cancelar venda</Botao>
+          <Botao variante="perigo" onClick={cancelar} carregando={enviando} disabled={motivo.trim().length < 15}>{comNota ? 'Cancelar NFC-e e venda' : 'Cancelar venda'}</Botao>
         </>}
       >
+        {comNota && (
+          <p className={`mb-3 flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${minutosNota > 30 ? 'bg-rubro-50 text-rubro-600 dark:bg-rubro-600/20 dark:text-rubro-300' : 'bg-papel-200 dark:bg-noite-700'}`}>
+            <Icone nome="alerta" className="mt-0.5 h-4 w-4 shrink-0" />
+            {minutosNota > 30
+              ? `A nota foi autorizada há ${minutosNota} minutos. O prazo comum de cancelamento é de 30 minutos; a SEFAZ pode recusar. Fora do prazo, faça uma devolução.`
+              : `Nota autorizada há ${minutosNota} minuto(s). O cancelamento na SEFAZ costuma ser aceito até 30 minutos após a autorização.`}
+          </p>
+        )}
         <Campo rotulo="Motivo do cancelamento" ajuda={`${motivo.trim().length} de no mínimo 15 caracteres`}>
           <textarea className="campo" rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} autoFocus />
         </Campo>
