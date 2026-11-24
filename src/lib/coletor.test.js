@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+vi.mock('../lib/supabase.js', () => ({ supabase: {}, mensagemErro: (e) => String(e), configurado: false }))
 import { lerArquivoColetor } from '../pages/Estoque.jsx'
 
 describe('arquivo do coletor', () => {
