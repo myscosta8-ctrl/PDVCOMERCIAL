@@ -12,6 +12,7 @@ import Vendas from './pages/Vendas.jsx'
 import Configuracoes from './pages/Configuracoes.jsx'
 import Clientes from './pages/Clientes.jsx'
 import Orcamentos from './pages/Orcamentos.jsx'
+import Entradas from './pages/Entradas.jsx'
 
 const TELAS = [
   { id: 'inicio', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
@@ -20,6 +21,7 @@ const TELAS = [
   { id: 'orcamentos', nome: 'Orçamentos', icone: 'nota', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'clientes', nome: 'Clientes', icone: 'usuario', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'produtos', nome: 'Produtos', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
+  { id: 'entradas', nome: 'Entrada de mercadorias', icone: 'estoque', papeis: ['administrador', 'gerente'] },
   { id: 'vendas', nome: 'Vendas', icone: 'vendas', papeis: ['administrador', 'gerente'] },
   { id: 'configuracoes', nome: 'Configurações', icone: 'configuracoes', papeis: ['administrador'] },
 ]
@@ -148,6 +150,7 @@ function Painel() {
           {tela === 'orcamentos' && <Orcamentos irPara={ir} />}
           {tela === 'clientes' && <Clientes />}
           {tela === 'produtos' && <Produtos />}
+          {tela === 'entradas' && perfil.papel !== 'operador' && <Entradas />}
           {tela === 'vendas' && perfil.papel !== 'operador' && <Vendas />}
           {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}
         </main>

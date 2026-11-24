@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { chamarNfce } from '../lib/nfce.js'
-import { dataHora } from '../lib/formato.js'
+import { dataHora, lerNumero } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Lista, Confirmacao, Icone, useAviso } from '../components/ui.jsx'
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map((u) => ({ valor: u, texto: u }))
@@ -60,6 +60,8 @@ export default function Configuracoes() {
     dados.cnpj = dados.cnpj?.replace(/\D/g, '') || null
     dados.inscricao_estadual = dados.inscricao_estadual?.replace(/\D/g, '') || null
     dados.municipio_ibge = dados.municipio_ibge?.replace(/\D/g, '') || null
+    dados.markup_padrao = lerNumero(dados.markup_padrao)
+    if (Number.isNaN(dados.markup_padrao) || dados.markup_padrao < 0) { setSalvando(''); avisar('Markup padrão inválido.', 'erro'); return }
     const { error } = await supabase.from('empresas').update(dados).eq('id', id)
     setSalvando('')
     if (error) avisar(mensagemErro(error), 'erro')
@@ -117,6 +119,7 @@ export default function Configuracoes() {
           <Campo rotulo="UF"><Lista valor={emp.uf} opcoes={UFS} onMudar={(v) => setEmp((x) => ({ ...x, uf: v }))} /></Campo>
           <Campo rotulo="CEP"><input className="campo" inputMode="numeric" value={emp.endereco.cep} onChange={me('cep')} /></Campo>
           <Campo rotulo="Telefone"><input className="campo" inputMode="tel" value={emp.endereco.fone} onChange={me('fone')} /></Campo>
+          <Campo rotulo="Markup padrão (%)" ajuda="Usado para sugerir preço de venda quando o produto não tem markup próprio"><input className="campo num" inputMode="decimal" value={String(emp.markup_padrao ?? '').replace('.', ',')} onChange={(e) => setEmp((x) => ({ ...x, markup_padrao: e.target.value }))} /></Campo>
         </div>
 
         <h3 className="titulo-secao border-t border-papel-200 pt-4 dark:border-noite-700">Emissão de NFC-e</h3>

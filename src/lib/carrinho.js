@@ -2,8 +2,9 @@ import { arred } from './formato.js'
 
 // Lógica pura do carrinho (sem tela), testada em carrinho.test.js
 
-export function adicionar(itens, produto, quantidade = 1) {
-  const existente = itens.find((i) => i.produto_id === produto.id && !i.lote_id)
+// lote (opcional): { id, numero, validade }
+export function adicionar(itens, produto, quantidade = 1, lote = null) {
+  const existente = itens.find((i) => i.produto_id === produto.id && (i.lote_id ?? null) === (lote?.id ?? null))
   if (existente) {
     return itens.map((i) => (i === existente ? { ...i, quantidade: i.quantidade + quantidade } : i))
   }
@@ -17,6 +18,10 @@ export function adicionar(itens, produto, quantidade = 1) {
       preco_unitario: Number(produto.preco_venda),
       quantidade,
       desconto: 0,
+      e_kit: Boolean(produto.e_kit),
+      lote_id: lote?.id ?? null,
+      lote_numero: lote?.numero ?? null,
+      lote_validade: lote?.validade ?? null,
     },
   ]
 }
@@ -42,7 +47,21 @@ export function totais(itens, descontoGeral = 0, pagamentos = []) {
 
 // Formato esperado pela função finalizar_venda do banco
 export const paraEnvio = (itens) =>
-  itens.map((i) => ({ produto_id: i.produto_id, quantidade: i.quantidade, desconto: i.desconto || 0 }))
+  itens.map((i) => ({ produto_id: i.produto_id, quantidade: i.quantidade, desconto: i.desconto || 0, ...(i.lote_id ? { lote_id: i.lote_id } : {}) }))
+
+// Troca o lote de um item (junta com outro item do mesmo lote, se houver)
+export function trocarLote(itens, chave, lote) {
+  const alvo = itens.find((i) => i.chave === chave)
+  if (!alvo) return itens
+  const igual = itens.find((i) => i !== alvo && i.produto_id === alvo.produto_id && i.lote_id === lote.id)
+  if (igual) return itens.filter((i) => i !== alvo).map((i) => (i === igual ? { ...i, quantidade: i.quantidade + alvo.quantidade } : i))
+  return itens.map((i) => (i === alvo ? { ...i, lote_id: lote.id, lote_numero: lote.numero, lote_validade: lote.validade } : i))
+}
+
+// Preço sugerido a partir do custo e do markup (%) e margem (%) resultante
+export const precoSugerido = (custo, markup) => (Number(custo) > 0 && markup != null && markup !== '' ? Math.round(Number(custo) * (1 + Number(markup) / 100) * 100) / 100 : null)
+export const margemSobreVenda = (custo, venda) => (Number(venda) > 0 && Number(custo) > 0 ? ((Number(venda) - Number(custo)) / Number(venda)) * 100 : null)
+export const markupDeMargem = (margem) => (Number(margem) < 100 ? (Number(margem) / (100 - Number(margem))) * 100 : null)
 
 // Leitura "3*789..." = quantidade 3 do código lido
 export function lerCodigo(texto) {

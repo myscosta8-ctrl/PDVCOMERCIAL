@@ -5,7 +5,7 @@ const h = (horas, min = 0) => { const d = new Date(agora); d.setHours(horas, min
 const EMP = {
   id: 'e1', razao_social: 'Farma Família Ltda', nome_fantasia: 'Farma Família', segmento: 'farmacia', cnpj: '12345678000195',
   inscricao_estadual: '151234567', uf: 'PA', municipio_ibge: '1501808', regime_tributario: 'simples', nfce_ambiente: 2, nfce_serie: 1,
-  nfce_csc_id: '000001', certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
+  nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
 }
@@ -74,6 +74,16 @@ const TABELAS = {
     { id: 'pv2', numero: 7, tipo: 'pedido', cliente_nome: 'Clínica Bem-Estar', itens: [{ produto_id: 'p3', descricao: 'Soro fisiológico 0,9%, 500 ml', quantidade: 20, preco_unitario: 8.9, desconto: 0 }], total: 178, validade: '2026-11-26', status: 'aberto', criado_em: h(8, 40), criador: { nome: 'Carlos Lima' } },
     { id: 'pv3', numero: 17, tipo: 'orcamento', cliente_nome: 'Raimundo Pereira', itens: [{ produto_id: 'p1', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', quantidade: 3, preco_unitario: 6.9, desconto: 0 }], total: 20.7, validade: '2026-11-20', status: 'aberto', criado_em: '2026-11-13T14:00:00Z', criador: { nome: 'Ana Ribeiro' } },
   ],
+  fornecedores: [{ id: 'f1', cnpj: '11222333000144', razao_social: 'Distribuidora Norte Farma Ltda', nome_fantasia: 'Norte Farma' }],
+  produto_fornecedor: [{ codigo_fornecedor: 'DIP500', fator: 1, produto: { id: 'p1', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', unidade: 'UN', preco_venda: 6.9, preco_custo: 2.35, markup: null, e_kit: false, ean: '7896004700120' } }],
+  notas_entrada: [
+    { id: 'n2', numero: 88412, serie: 1, emissao: '2026-11-21T09:00:00-03:00', criado_em: h(9, 5), valor_total: 1842.6, fornecedor_id: 'f1', duplicatas: [{ numero: '001', vencimento: '2026-12-21', valor: 921.3 }, { numero: '002', vencimento: '2027-01-20', valor: 921.3 }], chave: '15261111222333000144550010000884121000012345', fornecedor: { razao_social: 'Distribuidora Norte Farma Ltda', nome_fantasia: 'Norte Farma', cnpj: '11222333000144' }, itens: [{ count: 14 }] },
+    { id: 'n1', numero: 5531, serie: 2, emissao: '2026-11-12T15:00:00-03:00', criado_em: '2026-11-12T19:40:00Z', valor_total: 612.0, fornecedor_id: 'f2', duplicatas: [], chave: '15261199888777000166550020000055311000054321', fornecedor: { razao_social: 'Higiene e Cia Comércio Ltda', nome_fantasia: null, cnpj: '99888777000166' }, itens: [{ count: 6 }] },
+  ],
+  lotes: [
+    { id: 'l1', numero: 'DP2611A', validade: '2026-12-10', quantidade: 34, produto_id: 'p1' },
+    { id: 'l2', numero: 'DP2702C', validade: '2027-08-30', quantidade: 50, produto_id: 'p1' },
+  ],
   nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
 }
 const RPC = {
@@ -95,6 +105,7 @@ const RPC = {
   resumo_caixa: { abertura: 150, formas: { dinheiro: 97.7, pix: 65.8, credito: 110, debito: 26.8 }, recebimentos: { dinheiro: 60, pix: 40 }, devolucoes_dinheiro: 0, suprimentos: 50, sangrias: 200, qtd_vendas: 5, dinheiro_esperado: 157.7 },
   situacao_cliente: { limite: 500, saldo_devedor: 65.5, disponivel: 434.5, em_atraso: 0, dias_atraso: 0, vale: 30, bloqueado: false, convenio: null },
   credenciais_configuradas: { certificado: true, senha: true, csc: true },
+  lotes_alerta: { vencidos: 1, vencendo: 3, lista: [] },
 }
 
 function consulta(tabela) {
@@ -112,7 +123,7 @@ function consulta(tabela) {
       }))
       return q
     },
-    eq: (campo, valor) => { linhas = linhas.filter((l) => !(campo in l) || l[campo] === valor); return q },
+    eq: (campo, valor) => { linhas = linhas.filter((l) => !(campo in l) || l[campo] === valor); return q }, gt: () => q,
     insert: () => q, update: () => q,
     single: () => { unico = true; return q },
     maybeSingle: () => { unico = true; return q },

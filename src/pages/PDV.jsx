@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useSessao } from '../lib/sessao.js'
 import { useCaixaAberto } from '../lib/caixa.js'
-import { adicionar, alterarQuantidade, remover, totais, totalItem, paraEnvio, lerCodigo } from '../lib/carrinho.js'
+import { adicionar, alterarQuantidade, remover, totais, totalItem, paraEnvio, lerCodigo, trocarLote } from '../lib/carrinho.js'
 import { dinheiro, lerNumero, arred } from '../lib/formato.js'
 import { Botao, Campo, Confirmacao, Etiqueta, Icone, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
@@ -21,6 +21,14 @@ const FORMAS = [
 const PARCELAS = Array.from({ length: 12 }, (_, i) => ({ valor: i + 1, texto: i === 0 ? '1 parcela' : `${i + 1} parcelas` }))
 const TIPOS_PRE = [{ valor: 'orcamento', texto: 'Orçamento' }, { valor: 'pedido', texto: 'Pedido de venda' }]
 const nomeForma = (f) => FORMAS.find((x) => x.forma === f)?.texto ?? f
+const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+const dataBR = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR') : '')
+const venceEmBreve = (d) => d && d <= new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
+
+async function lotesDisponiveis(produtoId) {
+  const { data } = await supabase.from('lotes').select('id, numero, validade, quantidade').eq('produto_id', produtoId).gt('quantidade', 0).order('validade', { nullsFirst: false })
+  return data ?? []
+}
 
 function Tecla({ children }) {
   return <kbd className="num rounded border border-papel-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-tinta-600 dark:border-noite-600 dark:bg-noite-700 dark:text-tinta-300">{children}</kbd>
@@ -42,6 +50,7 @@ export default function PDV() {
   const [escolherCliente, setEscolherCliente] = useState(false)
   const [salvarPre, setSalvarPre] = useState(false)
   const [preVenda, setPreVenda] = useState(null)
+  const [escolhaLote, setEscolhaLote] = useState(null)
   const t = useMemo(() => totais(itens), [itens])
 
   // Orçamento ou pedido aberto a partir da tela Orçamentos
@@ -53,7 +62,7 @@ export default function PDV() {
       const { data: pv } = await supabase.from('pre_vendas').select('*').eq('id', id).maybeSingle()
       if (!pv || pv.status !== 'aberto') { avisar('Orçamento não está mais disponível.', 'erro'); return }
       const ids = pv.itens.map((i) => i.produto_id)
-      const { data: prods } = await supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, ativo').in('id', ids)
+      const { data: prods } = await supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, ativo, e_kit, controla_lote').in('id', ids)
       let novos = []
       const fora = []
       for (const i of pv.itens) {
@@ -93,10 +102,20 @@ export default function PDV() {
     )
   }
 
-  const incluir = (p, qtd) => {
-    setItens((c) => adicionar(c, p, qtd))
-    setDestaque({ ...p, qtdIncluida: qtd })
+  const incluir = async (p, qtd) => {
+    let lote = null
+    if (p.controla_lote && !p.e_kit) {
+      const lotes = await lotesDisponiveis(p.id)
+      const hoje = hojeISO()
+      const validos = lotes.filter((l) => !l.validade || l.validade >= hoje)
+      if (lotes.length && !validos.length) { avisar(`Todos os lotes de ${p.descricao} com saldo estão vencidos. Venda bloqueada.`, 'erro'); return }
+      lote = validos[0] ?? null
+    }
+    setItens((c) => adicionar(c, p, qtd, lote))
+    setDestaque({ ...p, qtdIncluida: qtd, lote })
   }
+
+  const abrirLotes = async (item) => setEscolhaLote({ item, lotes: await lotesDisponiveis(item.produto_id) })
 
   const pesquisar = async (e) => {
     e.preventDefault()
@@ -105,7 +124,7 @@ export default function PDV() {
     if (!(quantidade > 0)) { avisar('Quantidade inválida.', 'erro'); return }
     const limpo = q.replace(/[%,()]/g, '')
     const soNumeros = /^\d{6,14}$/.test(limpo)
-    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado').eq('ativo', true).limit(20)
+    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado, controla_lote, e_kit').eq('ativo', true).limit(20)
     consulta = soNumeros ? consulta.or(`ean.eq.${limpo},codigo.eq.${limpo}`) : consulta.or(`descricao.ilike.%${limpo}%,codigo.eq.${limpo}`)
     const { data, error } = await consulta
     if (error) { avisar(mensagemErro(error), 'erro'); return }
@@ -169,7 +188,7 @@ export default function PDV() {
             <div className="min-w-0 flex-1">
               <p className="text-sm text-tinta-400">Último item incluído</p>
               <p className="truncate text-xl font-semibold">{destaque.descricao}</p>
-              <p className="text-sm text-tinta-400">Código {destaque.ean || destaque.codigo || 'não informado'}</p>
+              <p className="text-sm text-tinta-400">Código {destaque.ean || destaque.codigo || 'não informado'}{destaque.lote ? `, lote ${destaque.lote.numero}${destaque.lote.validade ? ` com validade ${dataBR(destaque.lote.validade)}` : ''}` : ''}{destaque.e_kit ? ', kit' : ''}</p>
             </div>
             <div className="num text-right">
               <p className="font-sans text-sm text-tinta-400">Preço unitário</p>
@@ -177,9 +196,10 @@ export default function PDV() {
             </div>
             <div className="num text-right">
               <p className="font-sans text-sm text-tinta-400">Em estoque</p>
-              <p className={`text-2xl font-semibold ${Number(destaque.estoque_atual) - destaque.qtdIncluida < 0 ? 'text-rubro-600' : ''}`}>{Number(destaque.estoque_atual)} {destaque.unidade}</p>
+              <p className={`text-2xl font-semibold ${!destaque.e_kit && Number(destaque.estoque_atual) - destaque.qtdIncluida < 0 ? 'text-rubro-600' : ''}`}>{destaque.e_kit ? 'Kit' : `${Number(destaque.estoque_atual)} ${destaque.unidade}`}</p>
             </div>
             {destaque.controlado && <Etiqueta tom="critico">Medicamento controlado: confira a receita</Etiqueta>}
+            {venceEmBreve(destaque.lote?.validade) && <Etiqueta tom="alerta">Lote vence em até 30 dias</Etiqueta>}
           </div>
         )}
 
@@ -195,7 +215,15 @@ export default function PDV() {
                 {itens.map((i, n) => (
                   <tr key={i.chave} className={n === itens.length - 1 ? 'bg-caixa-50/60 dark:bg-caixa-700/10' : ''}>
                     <td className="num text-tinta-400">{n + 1}</td>
-                    <td className="font-medium">{i.descricao}</td>
+                    <td>
+                      <span className="font-medium">{i.descricao}</span>
+                      {i.lote_id && (
+                        <button className={`block text-xs hover:underline ${venceEmBreve(i.lote_validade) ? 'text-ambar-600 dark:text-ambar-300' : 'text-tinta-400'}`} onClick={() => abrirLotes(i)}>
+                          Lote {i.lote_numero}{i.lote_validade ? `, validade ${dataBR(i.lote_validade)}` : ''} (trocar)
+                        </button>
+                      )}
+                      {i.e_kit && <span className="block text-xs text-tinta-400">Kit: baixa os componentes</span>}
+                    </td>
                     <td className="text-right">
                       <input
                         key={i.quantidade}
@@ -319,6 +347,25 @@ export default function PDV() {
         onCancelar={() => setLimparAberto(false)}
         onConfirmar={() => { setItens([]); setDestaque(null); setLimparAberto(false); setCliente(null); setPreVenda(null) }}
       />
+
+      <TelaSuspensa aberta={!!escolhaLote} titulo="Escolher lote" subtitulo={escolhaLote?.item.descricao} onFechar={() => setEscolhaLote(null)}>
+        {escolhaLote && (
+          <ul className="-mx-2 divide-y divide-papel-200 dark:divide-noite-700">
+            {escolhaLote.lotes.map((l) => {
+              const vencido = l.validade && l.validade < hojeISO()
+              return (
+                <li key={l.id}>
+                  <button disabled={vencido} className="flex w-full items-center justify-between rounded-lg px-2 py-3 text-left hover:bg-caixa-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-noite-700"
+                    onClick={() => { setItens((c) => trocarLote(c, escolhaLote.item.chave, l)); setEscolhaLote(null) }}>
+                    <span><span className="font-medium">Lote {l.numero}</span><span className="block text-sm text-tinta-400">Validade {l.validade ? dataBR(l.validade) : 'não informada'}, saldo {Number(l.quantidade)}</span></span>
+                    {vencido ? <Etiqueta tom="critico">Vencido</Etiqueta> : l.id === escolhaLote.item.lote_id ? <Etiqueta tom="positivo">Atual</Etiqueta> : venceEmBreve(l.validade) ? <Etiqueta tom="alerta">Vence em breve</Etiqueta> : null}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </TelaSuspensa>
 
       <SeletorCliente aberta={escolherCliente} onFechar={() => setEscolherCliente(false)} onEscolher={(c) => { setCliente(c); setEscolherCliente(false); busca.current?.focus() }} />
 
