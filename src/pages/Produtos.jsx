@@ -196,10 +196,10 @@ export default function Produtos() {
             <Icone nome="busca" className="h-4 w-4 text-tinta-400" />
             <input className="w-full bg-transparent py-2 outline-none placeholder:text-tinta-300" placeholder="Buscar por descrição, código ou código de barras" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar produtos" />
           </div>
-          <div className="flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+          <div className="flex abas" role="tablist">
             {FILTROS.map((f) => (
               <button key={f.id} role="tab" aria-selected={filtro === f.id} onClick={() => setFiltro(f.id)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${filtro === f.id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>
+                className={`aba ${filtro === f.id ? 'aba-ativa' : ''}`}>
                 {f.nome}
               </button>
             ))}
@@ -213,7 +213,7 @@ export default function Produtos() {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40">
+              <thead>
                 <tr><th className="w-10"><input type="checkbox" className="h-4 w-4 accent-caixa-600" aria-label="Selecionar todos" checked={visiveis.length > 0 && visiveis.every((p) => selecionados[p.id])} onChange={(e) => setSelecionados((x) => ({ ...x, ...Object.fromEntries(visiveis.map((p) => [p.id, e.target.checked])) }))} /></th><th>Produto</th><th>Código de barras</th><th className="text-right">Custo</th><th className="text-right">Venda</th><th className="text-right">Margem</th><th className="text-right">Estoque</th><th>Situação</th><th /></tr>
               </thead>
               <tbody>

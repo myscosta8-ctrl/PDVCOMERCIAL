@@ -10,10 +10,10 @@ export function Conferencia({ cad, lancs, recarregar }) {
   const VISTAS = [['conferencia', 'Conferência'], ['reclassificar', 'Reclassificar em grupo'], ['historico', 'Histórico de alterações']]
   return (
     <>
-      <div className="mb-4 inline-flex gap-1 rounded-lg border border-papel-300 p-1 dark:border-noite-600" role="tablist">
+      <div className="mb-4 subabas" role="tablist">
         {VISTAS.map(([id, nome]) => (
           <button key={id} role="tab" aria-selected={vista === id} onClick={() => setVista(id)}
-            className={`rounded-md px-3 py-1 text-sm font-medium ${vista === id ? 'bg-caixa-600 text-white' : 'text-tinta-600 hover:bg-papel-200 dark:text-tinta-300 dark:hover:bg-noite-700'}`}>{nome}</button>
+            className={`subaba ${vista === id ? 'subaba-ativa' : ''}`}>{nome}</button>
         ))}
       </div>
       {lancs === null ? <p className="text-sm text-tinta-400">Carregando…</p> : <>

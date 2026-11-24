@@ -79,10 +79,10 @@ export default function Orcamentos({ irPara }) {
 
       <div className="mt-4 cartao overflow-hidden">
         <div className="border-b border-papel-200 p-3 dark:border-noite-700">
-          <div className="inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+          <div className="inline-flex abas" role="tablist">
             {FILTROS.map((f) => (
               <button key={f.id} role="tab" aria-selected={filtro === f.id} onClick={() => setFiltro(f.id)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${filtro === f.id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{f.nome}</button>
+                className={`aba ${filtro === f.id ? 'aba-ativa' : ''}`}>{f.nome}</button>
             ))}
           </div>
         </div>
@@ -91,7 +91,7 @@ export default function Orcamentos({ irPara }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Número</th><th>Cliente</th><th>Criado</th><th>Validade</th><th className="text-right">Itens</th><th className="text-right">Total</th><th /></tr></thead>
+              <thead><tr><th>Número</th><th>Cliente</th><th>Criado</th><th>Validade</th><th className="text-right">Itens</th><th className="text-right">Total</th><th /></tr></thead>
               <tbody>
                 {visiveis.map((p) => (
                   <tr key={p.id} onClick={() => setDetalhe(p)} className="cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40">

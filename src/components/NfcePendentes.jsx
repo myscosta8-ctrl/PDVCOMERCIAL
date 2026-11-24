@@ -43,7 +43,7 @@ export function NfcePendentes({ ativa, irPara, podeAbrir }) {
   if (!qtd) return null
   return (
     <button onClick={() => podeAbrir && irPara('fiscal')} disabled={!podeAbrir}
-      className="flex items-center gap-2 rounded-lg px-2 py-1 font-medium text-ambar-600 hover:bg-papel-100 disabled:hover:bg-transparent dark:text-ambar-300 dark:hover:bg-noite-700"
+      className="flex items-center gap-2 rounded-full bg-ambar-50 px-3 py-1 font-semibold text-ambar-700 ring-1 ring-inset ring-ambar-100 hover:bg-ambar-100 disabled:hover:bg-ambar-50 dark:bg-ambar-600/15 dark:text-ambar-300 dark:ring-ambar-700/50"
       title="NFC-e emitidas sem a SEFAZ. São transmitidas sozinhas quando a conexão volta (prazo de 24 horas).">
       <Icone nome="alerta" className="h-4 w-4" />
       {enviando ? 'Transmitindo NFC-e…' : `${qtd} NFC-e aguardando a SEFAZ`}

@@ -133,10 +133,10 @@ export default function Clientes() {
 
       <div className="mt-4 cartao overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-papel-200 p-3 dark:border-noite-700">
-          <div className="flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+          <div className="flex abas" role="tablist">
             {ABAS.map((a) => (
               <button key={a.id} role="tab" aria-selected={aba === a.id} onClick={() => setAba(a.id)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === a.id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{a.nome}</button>
+                className={`aba ${aba === a.id ? 'aba-ativa' : ''}`}>{a.nome}</button>
             ))}
           </div>
           {aba === 'clientes' && <>
@@ -152,7 +152,7 @@ export default function Clientes() {
           visiveis.length === 0 ? <Vazio icone="usuario" titulo={clientes.length ? 'Nenhum cliente neste filtro' : 'Nenhum cliente cadastrado'} texto="Cadastre clientes para vender no crediário, no convênio e gerar vale-troca." /> : (
             <div className="overflow-x-auto">
               <table className="tabela w-full text-[0.95rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Cliente</th><th>Contato</th><th>Convênio</th><th className="text-right">Limite</th><th className="text-right">Saldo devedor</th><th>Situação</th></tr></thead>
+                <thead><tr><th>Cliente</th><th>Contato</th><th>Convênio</th><th className="text-right">Limite</th><th className="text-right">Saldo devedor</th><th>Situação</th></tr></thead>
                 <tbody>
                   {visiveis.map((c) => {
                     const s = porCliente[c.id] ?? { devedor: 0, atraso: 0 }
@@ -180,7 +180,7 @@ export default function Clientes() {
           contas.length === 0 ? <Vazio icone="dinheiro" titulo="Nenhuma conta em aberto" texto="Vendas no crediário e no convênio geram parcelas que aparecem aqui." /> : (
             <div className="overflow-x-auto">
               <table className="tabela w-full text-[0.95rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Vencimento</th><th>Cliente</th><th>Origem</th><th>Parcela</th><th className="text-right">Valor</th><th className="text-right">Em aberto</th><th /></tr></thead>
+                <thead><tr><th>Vencimento</th><th>Cliente</th><th>Origem</th><th>Parcela</th><th className="text-right">Valor</th><th className="text-right">Em aberto</th><th /></tr></thead>
                 <tbody>
                   {contas.map((ct) => {
                     const vencida = ct.vencimento < hoje
@@ -204,7 +204,7 @@ export default function Clientes() {
           convenios.length === 0 ? <Vazio icone="nota" titulo="Nenhum convênio cadastrado" texto="Convênios com empresas ou órgãos permitem vender para funcionários e cobrar no fechamento do mês." /> : (
             <div className="overflow-x-auto">
               <table className="tabela w-full text-[0.95rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Convênio</th><th className="text-right">Desconto</th><th className="text-right">Fechamento</th><th className="text-right">Vencimento</th><th className="text-right">Clientes</th><th>Situação</th></tr></thead>
+                <thead><tr><th>Convênio</th><th className="text-right">Desconto</th><th className="text-right">Fechamento</th><th className="text-right">Vencimento</th><th className="text-right">Clientes</th><th>Situação</th></tr></thead>
                 <tbody>
                   {convenios.map((v) => (
                     <tr key={v.id} onClick={() => gestor && setConvEdicao({ ...v, desconto_percentual: String(v.desconto_percentual).replace('.', ','), dia_fechamento: String(v.dia_fechamento), dias_vencimento: String(v.dias_vencimento) })} className={gestor ? 'cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40' : ''}>

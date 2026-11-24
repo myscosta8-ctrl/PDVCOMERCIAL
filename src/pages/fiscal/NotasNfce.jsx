@@ -78,7 +78,7 @@ export function NotasNfce({ empresa }) {
           <Vazio icone="ok" titulo="Nada aguardando a SEFAZ" texto="Quando a SEFAZ não responder na hora da venda, a nota sai em contingência e aparece aqui até ser autorizada." />
         ) : (
           <table className="tabela w-full text-[0.95rem]">
-            <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>NFC-e</th><th>Venda</th><th>Emitida</th><th>Situação</th><th /></tr></thead>
+            <thead><tr><th>NFC-e</th><th>Venda</th><th>Emitida</th><th>Situação</th><th /></tr></thead>
             <tbody>
               {pendentes.map((d) => {
                 const h = horasDesde(d.dh_contingencia ?? d.criado_em)
@@ -109,7 +109,7 @@ export function NotasNfce({ empresa }) {
           <Vazio icone="ok" titulo="Numeração em dia" texto="Nenhum número sem nota válida nesta série." />
         ) : (
           <table className="tabela w-full text-[0.95rem]">
-            <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Números</th><th>Situação</th><th /></tr></thead>
+            <thead><tr><th>Números</th><th>Situação</th><th /></tr></thead>
             <tbody>
               {lista.map((f) => (
                 <tr key={`${f.inicio}-${f.situacao}`}>

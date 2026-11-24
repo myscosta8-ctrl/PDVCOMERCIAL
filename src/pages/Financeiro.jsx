@@ -86,10 +86,10 @@ export default function Financeiro() {
   return (
     <div className="mx-auto max-w-7xl">
       <Cabecalho titulo="Financeiro" descricao="Contas a pagar e a receber, fluxo de caixa e resultado do negócio" />
-      <div className="mb-4 inline-flex flex-wrap gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+      <div className="mb-4 inline-flex flex-wrap abas" role="tablist">
         {ABAS.map(([id, nome]) => (
           <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
+            className={`aba ${aba === id ? 'aba-ativa' : ''}`}>{nome}</button>
         ))}
       </div>
       {(aba === 'pagar' || aba === 'receber') && (
@@ -254,7 +254,7 @@ function VisaoGeral({ admin, irPara }) {
         {despesas.length === 0 ? <Vazio icone="grafico" titulo="Sem despesas lançadas" texto="As despesas aparecem aqui conforme forem lançadas em Contas a pagar." /> : (
           <div className="overflow-x-auto">
             <table className="tabela w-full whitespace-nowrap text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Conta</th>{[-5, -4, -3, -2, -1, 0].map((k) => <th key={k} className="text-right">{rotMes(k)}</th>)}<th className="text-right">Variação</th></tr></thead>
+              <thead><tr><th>Conta</th>{[-5, -4, -3, -2, -1, 0].map((k) => <th key={k} className="text-right">{rotMes(k)}</th>)}<th className="text-right">Variação</th></tr></thead>
               <tbody>
                 {despesas.map((d) => {
                   const v = variacao(d.serie[5], d.serie[4])
@@ -417,7 +417,7 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Vencimento</th><th>Descrição</th><th>{pagar ? 'Fornecedor' : 'Cliente'}</th><th>Conta</th><th className="text-right">Valor</th><th className="text-right">Em aberto</th><th>Situação</th></tr></thead>
+              <thead><tr><th>Vencimento</th><th>Descrição</th><th>{pagar ? 'Fornecedor' : 'Cliente'}</th><th>Conta</th><th className="text-right">Valor</th><th className="text-right">Em aberto</th><th>Situação</th></tr></thead>
               <tbody>
                 {visiveis.map((l) => {
                   const s = situacao(l, hoje)
@@ -449,7 +449,7 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
           </div>
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Vencimento</th><th>Cliente</th><th>Origem</th><th className="text-right">Em aberto</th><th>Situação</th></tr></thead>
+              <thead><tr><th>Vencimento</th><th>Cliente</th><th>Origem</th><th className="text-right">Em aberto</th><th>Situação</th></tr></thead>
               <tbody>
                 {titulosCliente.slice(0, 50).map((t) => (
                   <tr key={t.id}>
@@ -861,7 +861,7 @@ function Fluxo() {
         {comMov.length === 0 ? <Vazio icone="dinheiro" titulo="Sem movimento no período" texto="Vendas, recebimentos e contas lançadas aparecem aqui." /> : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Dia</th><th className="text-right">Vendas à vista</th><th className="text-right">Recebimentos</th><th className="text-right">Outras entradas</th><th className="text-right">Saídas</th><th className="text-right">Previsto</th><th className="text-right">Acumulado</th></tr></thead>
+              <thead><tr><th>Dia</th><th className="text-right">Vendas à vista</th><th className="text-right">Recebimentos</th><th className="text-right">Outras entradas</th><th className="text-right">Saídas</th><th className="text-right">Previsto</th><th className="text-right">Acumulado</th></tr></thead>
               <tbody>
                 {comMov.map((l) => (
                   <tr key={l.dia} className={l.dia === hoje ? 'bg-caixa-50/60 dark:bg-caixa-700/10' : ''}>
@@ -982,7 +982,7 @@ function Dre({ centros }) {
         {dados === null ? <p className="p-5 text-sm text-tinta-400">Carregando…</p> : (
           <div className="overflow-x-auto">
             <table className="tabela w-full whitespace-nowrap text-[0.9rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40">
+              <thead>
                 <tr><th className="sticky left-0 z-10 bg-papel dark:bg-noite-800">Valores em R$</th>{meses.map((m) => <th key={m.mes} className="text-right">{MESES[m.mes - 1]}</th>)}<th className="text-right">Total</th><th className="text-right">% RL</th></tr>
               </thead>
               <tbody>

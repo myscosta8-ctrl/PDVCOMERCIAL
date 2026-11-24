@@ -4,21 +4,53 @@
 
 @layer base {
   html { font-size: 15px; }
+  body { font-feature-settings: 'ss01', 'cv11'; }
+  h1, h2, h3 { letter-spacing: -0.01em; }
   .num { font-family: theme('fontFamily.numero'); font-variant-numeric: tabular-nums; }
-  :focus-visible { outline: 2px solid theme('colors.caixa.500'); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid theme('colors.caixa.500'); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: theme('colors.caixa.200'); color: theme('colors.tinta.DEFAULT'); }
+  /* Barras de rolagem discretas */
+  * { scrollbar-width: thin; scrollbar-color: theme('colors.papel.400') transparent; }
+  .dark * { scrollbar-color: theme('colors.noite.500') transparent; }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 }
 
 @layer components {
-  .cartao { @apply rounded-xl border border-papel-200 bg-white dark:border-noite-700 dark:bg-noite-800; }
-  .campo  { @apply w-full rounded-lg border border-papel-300 bg-white px-3 py-2 text-[0.95rem] outline-none transition
-                   placeholder:text-tinta-300 focus:border-caixa-500 focus:ring-2 focus:ring-caixa-100
-                   dark:border-noite-600 dark:bg-noite-700 dark:focus:ring-caixa-700; }
-  .rotulo { @apply mb-1 block text-[0.8rem] font-medium text-tinta-400 dark:text-tinta-300; }
-  .titulo-secao { @apply text-base font-semibold text-tinta dark:text-papel; }
-  .tabela th { @apply px-4 py-2.5 text-[0.8rem] font-medium text-tinta-400 dark:text-tinta-300; }
-  .tabela td { @apply px-4 py-2.5; }
-  .tabela tbody tr { @apply border-t border-papel-200 dark:border-noite-700; }
+  /* Fundo da área de trabalho: papel com leve luz no topo */
+  .fundo-trabalho { background:
+      radial-gradient(1200px 380px at 30% -120px, rgba(20,145,125,.07), transparent 70%),
+      theme('colors.papel.DEFAULT'); }
+  .dark .fundo-trabalho { background:
+      radial-gradient(1200px 380px at 30% -120px, rgba(20,145,125,.10), transparent 70%),
+      theme('colors.noite.DEFAULT'); }
+
+  .cartao { @apply rounded-2xl bg-white shadow-cartao dark:bg-noite-800 dark:shadow-[0_0_0_1px_theme(colors.noite.700)]; }
+
+  .campo  { @apply w-full rounded-xl border border-papel-300 bg-white px-3.5 py-2.5 text-[0.95rem] outline-none transition
+                   shadow-[inset_0_1px_1px_rgba(22,37,45,.04)]
+                   placeholder:text-tinta-300 hover:border-papel-400 focus:border-caixa-500 focus:ring-4 focus:ring-caixa-500/15
+                   dark:border-noite-600 dark:bg-noite-700/70 dark:hover:border-noite-500 dark:focus:border-caixa-400 dark:focus:ring-caixa-400/15; }
+  .rotulo { @apply mb-1.5 block text-[0.82rem] font-semibold text-tinta-600 dark:text-tinta-300; }
+  .titulo-secao { @apply text-[1.05rem] font-semibold text-tinta dark:text-papel; }
+
+  /* Tabelas: cabeçalho discreto, linhas com respiro e destaque ao passar */
+  .tabela thead { @apply bg-papel-100/80 dark:bg-noite-900/40; }
+  .tabela th { @apply px-4 py-3 text-[0.78rem] font-semibold text-tinta-500 dark:text-tinta-300; }
+  .tabela td { @apply px-4 py-3; }
+  .tabela tbody tr { @apply border-t border-papel-200/80 transition-colors dark:border-noite-700; }
+  .tabela tbody tr.cursor-pointer:hover { @apply bg-caixa-50/60 dark:bg-caixa-900/20; }
+  .tabela tfoot tr { @apply border-t-2 border-papel-300 dark:border-noite-600; }
+  .tabela tfoot td { @apply py-3; }
+
+  /* Abas principais (segmentadas) e subabas */
+  .abas { @apply gap-1 rounded-xl bg-white p-1 shadow-cartao dark:bg-noite-800 dark:shadow-[0_0_0_1px_theme(colors.noite.700)]; }
+  .aba { @apply whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold text-tinta-500 transition hover:bg-papel-100 hover:text-tinta
+               dark:text-tinta-300 dark:hover:bg-noite-700 dark:hover:text-papel; }
+  .aba-ativa { @apply bg-tinta text-white shadow-sm hover:bg-tinta hover:text-white dark:bg-caixa-600 dark:hover:bg-caixa-600; }
+  .subabas { @apply inline-flex gap-5 border-b border-papel-300 dark:border-noite-600; }
+  .subaba { @apply -mb-px border-b-2 border-transparent px-0.5 pb-2 pt-1 text-sm font-semibold text-tinta-400 transition hover:text-tinta dark:hover:text-papel; }
+  .subaba-ativa { @apply border-caixa-500 text-caixa-700 hover:text-caixa-700 dark:text-caixa-300 dark:hover:text-caixa-300; }
+
   /* Borda serrilhada de bobina de cupom */
   .serrilha { background-image: radial-gradient(circle at 6px 0, transparent 5px, white 5.5px); background-size: 12px 8px; background-repeat: repeat-x; }
   .dark .serrilha { background-image: radial-gradient(circle at 6px 0, transparent 5px, theme('colors.noite.800') 5.5px); }

@@ -118,7 +118,7 @@ export default function Vendas() {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40">
+              <thead>
                 <tr><th>Venda</th><th>Horário</th><th>Operador</th><th>Pagamento</th><th>Nota fiscal</th><th className="text-right">Total</th></tr>
               </thead>
               <tbody>
@@ -146,7 +146,7 @@ export default function Vendas() {
         titulo={`Venda nº ${detalhe?.numero ?? ''}`}
         subtitulo={detalhe ? `${dataHora(detalhe.criado_em)}, operador ${detalhe.operador?.nome ?? ''}` : ''}
         onFechar={() => setDetalhe(null)}
-        largura="max-w-2xl"
+        largura="max-w-[54rem]"
         rodape={<>
           <Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>
           <Botao variante="secundario" icone="impressora" onClick={async () => { const x = await imprimirComprovanteVenda(detalhe.id); if (x.erro) avisar(x.erro, 'erro') }}>Comprovante</Botao>

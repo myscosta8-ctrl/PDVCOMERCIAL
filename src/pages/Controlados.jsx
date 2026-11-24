@@ -23,10 +23,10 @@ export default function Controlados() {
   return (
     <div className="mx-auto max-w-7xl">
       <Cabecalho titulo="Medicamentos controlados" descricao="Receitas retidas, livro de registro e balanço (Portaria 344/98 e antimicrobianos)" />
-      <div className="mb-4 inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+      <div className="mb-4 inline-flex abas" role="tablist">
         {[['receitas', 'Receitas'], ['livro', 'Livro de registro'], ['balanco', 'Balanço']].map(([id, nome]) => (
           <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
+            className={`aba ${aba === id ? 'aba-ativa' : ''}`}>{nome}</button>
         ))}
       </div>
       {aba === 'receitas' && <Receitas />}
@@ -75,7 +75,7 @@ function Receitas() {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Data</th><th>Tipo</th><th>Prescritor</th><th>Paciente</th><th>Comprador</th><th>Medicamentos</th><th>Venda</th></tr></thead>
+              <thead><tr><th>Data</th><th>Tipo</th><th>Prescritor</th><th>Paciente</th><th>Comprador</th><th>Medicamentos</th><th>Venda</th></tr></thead>
               <tbody>
                 {lista.map((r) => (
                   <tr key={r.id} onClick={() => setDetalhe(r)} className="cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40">
@@ -155,7 +155,7 @@ function Livro() {
           {p.movimentos.length === 0 ? <p className="p-4 text-sm text-tinta-400">Sem movimento no período.</p> : (
             <div className="overflow-x-auto">
               <table className="tabela w-full text-[0.9rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Data</th><th>Histórico</th><th>Documento</th><th>Lote</th><th className="text-right">Entrada</th><th className="text-right">Saída</th><th className="text-right">Saldo</th></tr></thead>
+                <thead><tr><th>Data</th><th>Histórico</th><th>Documento</th><th>Lote</th><th className="text-right">Entrada</th><th className="text-right">Saída</th><th className="text-right">Saldo</th></tr></thead>
                 <tbody>
                   {p.movimentos.map((m, k) => (
                     <tr key={k}>
@@ -206,7 +206,7 @@ function Balanco() {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Medicamento</th><th>Lista</th><th className="text-right">Inicial</th><th className="text-right">Entradas</th><th className="text-right">Saídas</th><th className="text-right">Perdas</th><th className="text-right">Ajustes</th><th className="text-right">Final</th></tr></thead>
+              <thead><tr><th>Medicamento</th><th>Lista</th><th className="text-right">Inicial</th><th className="text-right">Entradas</th><th className="text-right">Saídas</th><th className="text-right">Perdas</th><th className="text-right">Ajustes</th><th className="text-right">Final</th></tr></thead>
               <tbody>
                 {linhas.map((x, k) => (
                   <tr key={k}>

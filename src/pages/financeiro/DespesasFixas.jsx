@@ -109,7 +109,7 @@ export function DespesasFixas({ cad, lancs, recarregarLancamentos }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Vence</th><th>Descrição</th><th>Conta</th><th className="text-right">Valor</th><th>Neste mês</th></tr></thead>
+              <thead><tr><th>Vence</th><th>Descrição</th><th>Conta</th><th className="text-right">Valor</th><th>Neste mês</th></tr></thead>
               <tbody>
                 {fixas.map((f) => {
                   const l = doMes.get(f.id)

@@ -132,10 +132,10 @@ export default function Precos() {
   const agendadas = (promos ?? []).filter((p) => situacao(p).texto === 'Agendada')
 
   const barraAbas = (
-          <div className="inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+          <div className="inline-flex abas" role="tablist">
       {[['promocoes', 'Promoções'], ['tabelas', 'Tabelas de preço'], ...(farmacia && gestor ? [['cmed', 'Tabela CMED (medicamentos)']] : [])].map(([id, nome]) => (
         <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
+          className={`aba ${aba === id ? 'aba-ativa' : ''}`}>{nome}</button>
       ))}
     </div>
   )
@@ -164,7 +164,7 @@ export default function Precos() {
           promos.length === 0 ? <Vazio icone="dinheiro" titulo="Nenhuma promoção" texto="Crie promoções com preço especial, desconto por categoria ou preço de atacado a partir de uma quantidade. O caixa aplica sozinho." /> : (
             <div className="overflow-x-auto">
               <table className="tabela w-full text-[0.95rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Promoção</th><th>Tipo</th><th>Período</th><th>Abrangência</th><th>Situação</th></tr></thead>
+                <thead><tr><th>Promoção</th><th>Tipo</th><th>Período</th><th>Abrangência</th><th>Situação</th></tr></thead>
                 <tbody>
                   {promos.map((p) => {
                     const s = situacao(p)
@@ -186,7 +186,7 @@ export default function Precos() {
           tabelas.length === 0 ? <Vazio icone="vendas" titulo="Nenhuma tabela de preço" texto="Tabelas servem para atacado, revendedores ou parceiros: um ajuste percentual sobre o preço normal e, se quiser, preços fixos por produto." /> : (
             <div className="overflow-x-auto">
               <table className="tabela w-full text-[0.95rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Tabela</th><th className="text-right">Ajuste geral</th><th className="text-right">Preços fixos</th><th className="text-right">Clientes</th><th>Situação</th></tr></thead>
+                <thead><tr><th>Tabela</th><th className="text-right">Ajuste geral</th><th className="text-right">Preços fixos</th><th className="text-right">Clientes</th><th>Situação</th></tr></thead>
                 <tbody>
                   {tabelas.map((t) => (
                     <tr key={t.id} onClick={() => gestor && abrirTabela(t)} className={gestor ? 'cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40' : ''}>

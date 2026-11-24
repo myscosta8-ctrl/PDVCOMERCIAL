@@ -368,7 +368,7 @@ function consulta(tabela) {
 
 export const clienteDemo = {
   auth: {
-    getSession: async () => ({ data: { session: { user: { id: 'u1' } } } }),
+    getSession: async () => ({ data: { session: (() => { try { return localStorage.getItem('demo:saiu') ? null : { user: { id: 'u1' } } } catch { return { user: { id: 'u1' } } } })() } }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     signOut: async () => {},
     signInWithPassword: async () => ({ error: null }),

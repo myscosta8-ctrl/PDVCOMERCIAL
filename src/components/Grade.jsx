@@ -154,7 +154,7 @@ export function GerenciarGrade({ produto, onFechar, onAlterado }) {
             </div>
             <div className="overflow-x-auto rounded-xl border border-papel-200 dark:border-noite-700">
               <table className="tabela w-full text-[0.95rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Variação</th><th>Código de barras</th><th className="text-right">Preço de venda</th><th className="text-right">Estoque</th></tr></thead>
+                <thead><tr><th>Variação</th><th>Código de barras</th><th className="text-right">Preço de venda</th><th className="text-right">Estoque</th></tr></thead>
                 <tbody>
                   {variacoes.map((v) => (
                     <tr key={v.id}>

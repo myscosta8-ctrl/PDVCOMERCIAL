@@ -281,7 +281,7 @@ export default function PDV() {
             <Vazio icone="pdv" titulo="Nenhum item nesta venda" texto="Leia o código de barras do produto. Para várias unidades, digite a quantidade, um asterisco e o código (ex.: 3*7891234567895)." />
           ) : (
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40">
+              <thead>
                 <tr><th className="w-12">Item</th><th>Produto</th><th className="text-right">Quantidade</th><th className="text-right">Unitário</th><th className="text-right">Total</th><th className="w-12" /></tr>
               </thead>
               <tbody>

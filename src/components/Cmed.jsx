@@ -86,7 +86,7 @@ export function TabelaCmed() {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Produto</th><th>Código de barras</th><th className="text-right">Preço atual</th><th className="text-right">PMC</th><th className="text-right">Acima</th></tr></thead>
+              <thead><tr><th>Produto</th><th>Código de barras</th><th className="text-right">Preço atual</th><th className="text-right">PMC</th><th className="text-right">Acima</th></tr></thead>
               <tbody>
                 {acima.map((p) => (
                   <tr key={p.id}>

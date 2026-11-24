@@ -19,10 +19,10 @@ export function Relatorios({ cad, dre }) {
   const VISTAS = [['mes', 'Mês a mês'], ['ano', 'Ano por conta'], ['dre', 'DRE']]
   return (
     <>
-      <div className="mb-4 inline-flex gap-1 rounded-lg border border-papel-300 p-1 dark:border-noite-600" role="tablist">
+      <div className="mb-4 subabas" role="tablist">
         {VISTAS.map(([id, nome]) => (
           <button key={id} role="tab" aria-selected={vista === id} onClick={() => setVista(id)}
-            className={`rounded-md px-3 py-1 text-sm font-medium ${vista === id ? 'bg-caixa-600 text-white' : 'text-tinta-600 hover:bg-papel-200 dark:text-tinta-300 dark:hover:bg-noite-700'}`}>{nome}</button>
+            className={`subaba ${vista === id ? 'subaba-ativa' : ''}`}>{nome}</button>
         ))}
       </div>
       {vista === 'mes' && <MesAMes cad={cad} />}
@@ -131,7 +131,7 @@ function MesAMes({ cad }) {
             </div>
             <div className="overflow-x-auto">
               <table className="tabela w-full text-[0.95rem]">
-                <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Conta</th><th className="w-40">Peso no mês</th><th className="text-right">{MESES[Number(anterior.slice(5)) - 1]}</th><th className="text-right">{MESES[Number(mes.slice(5)) - 1]}</th><th className="text-right">Diferença</th><th className="text-right">Variação</th></tr></thead>
+                <thead><tr><th>Conta</th><th className="w-40">Peso no mês</th><th className="text-right">{MESES[Number(anterior.slice(5)) - 1]}</th><th className="text-right">{MESES[Number(mes.slice(5)) - 1]}</th><th className="text-right">Diferença</th><th className="text-right">Variação</th></tr></thead>
                 <tbody>
                   {lista.map((c) => (
                     <tr key={c.id} onClick={() => setAberta(c)} className="cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40">
@@ -182,7 +182,7 @@ function AnoPorConta({ cad }) {
       ) : (
         <div className="cartao overflow-x-auto">
           <table className="tabela w-full whitespace-nowrap text-sm">
-            <thead className="bg-papel/70 dark:bg-noite/40">
+            <thead>
               <tr><th className="sticky left-0 z-10 bg-papel dark:bg-noite-800">Conta</th>{meses.map((m) => <th key={m} className="text-right">{MESES[Number(m.slice(5)) - 1]}</th>)}<th className="text-right">Total</th><th className="text-right">Média</th></tr>
             </thead>
             <tbody>

@@ -9,10 +9,10 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 // =====================================================================
 
 const estilos = {
-  primario: 'bg-caixa-600 text-white hover:bg-caixa-700',
-  secundario: 'border border-papel-300 bg-white text-tinta hover:bg-papel dark:border-noite-600 dark:bg-noite-700 dark:text-papel dark:hover:bg-noite-600',
-  perigo: 'bg-rubro-600 text-white hover:brightness-110',
-  sucesso: 'bg-caixa-600 text-white hover:bg-caixa-700',
+  primario: 'bg-gradient-to-b from-caixa-500 to-caixa-600 text-white shadow-botao hover:from-caixa-600 hover:to-caixa-700',
+  secundario: 'bg-white text-tinta shadow-cartao hover:bg-papel-50 hover:shadow-[0_1px_2px_rgba(22,37,45,.08),0_0_0_1px_rgba(22,37,45,.14)] dark:bg-noite-700 dark:text-papel dark:shadow-[0_0_0_1px_theme(colors.noite.600)] dark:hover:bg-noite-600',
+  perigo: 'bg-gradient-to-b from-rubro-500 to-rubro-600 text-white shadow-[0_1px_0_rgba(255,255,255,.15)_inset,0_1px_2px_rgba(142,27,19,.35)] hover:from-rubro-600 hover:to-rubro-700',
+  sucesso: 'bg-gradient-to-b from-caixa-500 to-caixa-600 text-white shadow-botao hover:from-caixa-600 hover:to-caixa-700',
   discreto: 'text-tinta-600 hover:bg-papel-200 dark:text-tinta-300 dark:hover:bg-noite-700',
 }
 
@@ -21,7 +21,7 @@ export function Botao({ variante = 'primario', className = '', carregando, icone
     <button
       {...p}
       disabled={p.disabled || carregando}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[0.95rem] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${estilos[variante]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-[0.95rem] font-semibold leading-none transition active:translate-y-px disabled:pointer-events-none disabled:opacity-45 ${estilos[variante]} ${className}`}
     >
       {icone && !carregando && <Icone nome={icone} className="h-4 w-4" />}
       {carregando ? 'Aguarde…' : children}
@@ -45,19 +45,20 @@ export function TelaSuspensa({ aberta, titulo, subtitulo, onFechar, children, ro
   }, [aberta])
   if (!aberta) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/60 p-4 backdrop-blur-[2px]" onMouseDown={onFechar}>
-      <div role="dialog" aria-modal="true" className={`w-full ${largura} max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-cupom dark:bg-noite-800`} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4 border-b border-papel-200 px-6 py-4 dark:border-noite-700">
+    <div className="fixed inset-0 z-50 flex animate-esmaecer items-center justify-center bg-tinta-900/55 p-4 backdrop-blur-sm" onMouseDown={onFechar}>
+      <div role="dialog" aria-modal="true" className={`relative flex w-full ${largura} max-h-[90vh] animate-surgir flex-col overflow-hidden rounded-[1.25rem] bg-white shadow-janela dark:bg-noite-800 dark:shadow-[0_24px_64px_-12px_rgba(0,0,0,.6),0_0_0_1px_theme(colors.noite.700)]`} onMouseDown={(e) => e.stopPropagation()}>
+        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-caixa-600 via-caixa-400 to-caixa-600" />
+        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pb-4 pt-6">
           <div>
-            <h2 className="text-lg font-semibold">{titulo}</h2>
-            {subtitulo && <p className="text-sm text-tinta-400">{subtitulo}</p>}
+            <h2 className="text-[1.2rem] font-semibold leading-snug">{titulo}</h2>
+            {subtitulo && <p className="mt-0.5 text-sm text-tinta-400 dark:text-tinta-300">{subtitulo}</p>}
           </div>
-          <button onClick={onFechar} className="rounded-lg p-1.5 text-tinta-400 hover:bg-papel-200 dark:hover:bg-noite-700" aria-label="Fechar">
+          <button onClick={onFechar} className="-mr-2 -mt-1 rounded-xl p-2 text-tinta-400 transition hover:bg-papel-100 hover:text-tinta dark:hover:bg-noite-700 dark:hover:text-papel" aria-label="Fechar">
             <Icone nome="fechar" className="h-4 w-4" />
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
-        {rodape && <div className="flex justify-end gap-2 border-t border-papel-200 bg-papel/60 px-6 py-3 dark:border-noite-700 dark:bg-noite/40">{rodape}</div>}
+        <div className="min-h-0 flex-1 overflow-auto px-6 pb-6 pt-1">{children}</div>
+        {rodape && <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-papel-200 bg-papel-50 px-6 py-3.5 dark:border-noite-700 dark:bg-noite-900/40">{rodape}</div>}
       </div>
     </div>
   )
@@ -103,15 +104,15 @@ export function Lista({ valor, opcoes, onMudar, placeholder = 'Selecione…' }) 
     <div className="relative" ref={ref}>
       <button type="button" className="campo flex items-center justify-between text-left" onClick={() => setAberta((a) => !a)} aria-expanded={aberta}>
         <span className={atual ? '' : 'text-tinta-300'}>{atual?.texto ?? placeholder}</span>
-        <Icone nome="seta-baixo" className="h-4 w-4 text-tinta-400" />
+        <Icone nome="seta-baixo" className={`h-4 w-4 shrink-0 text-tinta-400 transition ${aberta ? 'rotate-180' : ''}`} />
       </button>
       {aberta && (
-        <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-papel-200 bg-white py-1 shadow-cupom dark:border-noite-600 dark:bg-noite-700">
+        <ul className="absolute z-50 mt-1.5 max-h-64 w-full animate-surgir overflow-auto rounded-xl bg-white p-1 shadow-elevado ring-1 ring-papel-200 dark:bg-noite-700 dark:ring-noite-600">
           {opcoes.map((o) => (
             <li key={String(o.valor)}>
               <button
                 type="button"
-                className={`flex w-full items-center justify-between px-3 py-2 text-left text-[0.95rem] hover:bg-caixa-50 dark:hover:bg-noite-600 ${o.valor === valor ? 'font-semibold text-caixa-600 dark:text-caixa-300' : ''}`}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[0.95rem] hover:bg-caixa-50 dark:hover:bg-noite-600 ${o.valor === valor ? 'bg-caixa-50/70 font-semibold text-caixa-700 dark:bg-caixa-900/30 dark:text-caixa-300' : ''}`}
                 onClick={() => { onMudar(o.valor); setAberta(false) }}
               >
                 {o.texto}
@@ -128,10 +129,10 @@ export function Lista({ valor, opcoes, onMudar, placeholder = 'Selecione…' }) 
 // Cabeçalho de página: título, descrição e ações
 export function Cabecalho({ titulo, descricao, children }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{titulo}</h1>
-        {descricao && <p className="mt-0.5 text-[0.95rem] text-tinta-400 dark:text-tinta-300">{descricao}</p>}
+        <h1 className="num text-[2rem] font-bold leading-none tracking-tight text-tinta dark:text-white">{titulo}</h1>
+        {descricao && <p className="mt-2 text-[0.95rem] text-tinta-400 dark:text-tinta-300">{descricao}</p>}
       </div>
       {children && <div className="flex flex-wrap gap-2">{children}</div>}
     </div>
@@ -141,38 +142,40 @@ export function Cabecalho({ titulo, descricao, children }) {
 // Indicador numérico com contexto (variação, observação)
 export function Indicador({ titulo, valor, detalhe, tom = 'neutro', icone }) {
   const tons = {
-    neutro: 'text-tinta dark:text-papel',
-    positivo: 'text-caixa-600 dark:text-caixa-300',
-    alerta: 'text-ambar-600 dark:text-ambar-300',
-    critico: 'text-rubro-600 dark:text-rubro-300',
+    neutro: { valor: 'text-tinta dark:text-white', chip: 'bg-papel-100 text-tinta-500 dark:bg-noite-700 dark:text-tinta-300', faixa: 'bg-transparent' },
+    positivo: { valor: 'text-caixa-700 dark:text-caixa-300', chip: 'bg-caixa-50 text-caixa-600 dark:bg-caixa-900/40 dark:text-caixa-300', faixa: 'bg-caixa-500' },
+    alerta: { valor: 'text-ambar-600 dark:text-ambar-300', chip: 'bg-ambar-50 text-ambar-600 dark:bg-ambar-600/15 dark:text-ambar-300', faixa: 'bg-ambar-500' },
+    critico: { valor: 'text-rubro-600 dark:text-rubro-300', chip: 'bg-rubro-50 text-rubro-600 dark:bg-rubro-600/15 dark:text-rubro-300', faixa: 'bg-rubro-500' },
   }
+  const t = tons[tom] ?? tons.neutro
   return (
-    <div className="cartao p-4">
-      <div className="flex items-center gap-2 text-[0.85rem] text-tinta-400 dark:text-tinta-300">
-        {icone && <Icone nome={icone} className="h-4 w-4" />}
-        {titulo}
+    <div className="cartao relative overflow-hidden p-4 pl-5">
+      <span aria-hidden="true" className={`absolute left-0 top-5 h-7 w-1 rounded-r-full ${t.faixa}`} />
+      <div className="flex items-center gap-2.5 text-[0.86rem] font-medium text-tinta-500 dark:text-tinta-300">
+        {icone && <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${t.chip}`}><Icone nome={icone} className="h-4 w-4" /></span>}
+        <span className="min-w-0 truncate">{titulo}</span>
       </div>
-      <div className={`num mt-1 text-[1.9rem] font-semibold leading-tight ${tons[tom]}`}>{valor}</div>
-      {detalhe && <div className="mt-0.5 text-[0.85rem] text-tinta-400 dark:text-tinta-300">{detalhe}</div>}
+      <div className={`num mt-2.5 text-[2rem] font-semibold leading-none tracking-tight ${t.valor}`}>{valor}</div>
+      {detalhe && <div className="mt-2 text-[0.84rem] text-tinta-400 dark:text-tinta-300">{detalhe}</div>}
     </div>
   )
 }
 
 export function Etiqueta({ tom = 'neutro', children }) {
   const tons = {
-    neutro: 'bg-papel-200 text-tinta-600 dark:bg-noite-700 dark:text-tinta-300',
-    positivo: 'bg-caixa-50 text-caixa-700 dark:bg-caixa-700/30 dark:text-caixa-300',
-    alerta: 'bg-ambar-50 text-ambar-600 dark:bg-ambar-600/20 dark:text-ambar-300',
-    critico: 'bg-rubro-50 text-rubro-600 dark:bg-rubro-600/20 dark:text-rubro-300',
+    neutro: 'bg-papel-100 text-tinta-600 ring-papel-300 dark:bg-noite-700 dark:text-tinta-300 dark:ring-noite-600',
+    positivo: 'bg-caixa-50 text-caixa-700 ring-caixa-200 dark:bg-caixa-900/40 dark:text-caixa-300 dark:ring-caixa-800',
+    alerta: 'bg-ambar-50 text-ambar-700 ring-ambar-100 dark:bg-ambar-600/15 dark:text-ambar-300 dark:ring-ambar-700/50',
+    critico: 'bg-rubro-50 text-rubro-600 ring-rubro-100 dark:bg-rubro-600/15 dark:text-rubro-300 dark:ring-rubro-700/50',
   }
-  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-0.5 text-[0.8rem] font-medium ${tons[tom]}`}>{children}</span>
+  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[0.78rem] font-semibold ring-1 ring-inset ${tons[tom] ?? tons.neutro}`}>{children}</span>
 }
 
 export function Vazio({ icone = 'caixa-vazia', titulo, texto, children }) {
   return (
     <div className="flex flex-col items-center px-6 py-12 text-center">
-      <div className="mb-3 rounded-full bg-papel-200 p-3 text-tinta-400 dark:bg-noite-700"><Icone nome={icone} className="h-6 w-6" /></div>
-      <p className="font-semibold">{titulo}</p>
+      <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-b from-papel-50 to-papel-200 text-tinta-400 shadow-cartao dark:from-noite-700 dark:to-noite-800 dark:text-tinta-300"><Icone nome={icone} className="h-6 w-6" /></div>
+      <p className="text-[1.05rem] font-semibold">{titulo}</p>
       {texto && <p className="mt-1 max-w-sm text-sm text-tinta-400">{texto}</p>}
       {children && <div className="mt-4">{children}</div>}
     </div>
@@ -182,8 +185,8 @@ export function Vazio({ icone = 'caixa-vazia', titulo, texto, children }) {
 // Barra horizontal de proporção
 export function Barra({ parte, total, tom = 'caixa' }) {
   const p = total > 0 ? Math.max(2, Math.round((parte / total) * 100)) : 0
-  const cor = { caixa: 'bg-caixa-500', ambar: 'bg-ambar-600', tinta: 'bg-tinta-400' }[tom]
-  return <div className="h-2 w-full rounded-full bg-papel-200 dark:bg-noite-700"><div className={`h-2 rounded-full ${cor}`} style={{ width: `${p}%` }} /></div>
+  const cor = { caixa: 'bg-gradient-to-r from-caixa-500 to-caixa-400', ambar: 'bg-gradient-to-r from-ambar-600 to-ambar-500', tinta: 'bg-tinta-400' }[tom]
+  return <div className="h-2 w-full overflow-hidden rounded-full bg-papel-200 dark:bg-noite-700"><div className={`h-2 rounded-full transition-[width] duration-500 ${cor}`} style={{ width: `${p}%` }} /></div>
 }
 
 // Ícones em traço (24x24)

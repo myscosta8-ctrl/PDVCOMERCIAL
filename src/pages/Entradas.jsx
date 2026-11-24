@@ -80,7 +80,7 @@ export default function Entradas() {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Nota</th><th>Fornecedor</th><th>Emissão</th><th>Lançada em</th><th className="text-right">Itens</th><th className="text-right">Valor</th></tr></thead>
+              <thead><tr><th>Nota</th><th>Fornecedor</th><th>Emissão</th><th>Lançada em</th><th className="text-right">Itens</th><th className="text-right">Valor</th></tr></thead>
               <tbody>
                 {lista.map((n) => (
                   <tr key={n.id} onClick={() => abrirDetalhe(n)} className="cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40">
@@ -260,7 +260,7 @@ function Importacao({ dados, onFechar, onConcluir }) {
         </div>
         <div className="overflow-x-auto rounded-xl border border-papel-200 dark:border-noite-700">
           <table className="tabela w-full min-w-[1100px] text-[0.9rem]">
-            <thead className="bg-papel/70 dark:bg-noite/40">
+            <thead>
               <tr><th>Item da nota</th><th>Produto da loja</th><th className="text-right">Fator</th><th className="text-right">Entra no estoque</th><th className="text-right">Custo unitário</th><th>Lote e validade</th><th>Preço de venda</th></tr>
             </thead>
             <tbody>

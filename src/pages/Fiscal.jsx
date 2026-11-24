@@ -52,10 +52,10 @@ export default function Fiscal() {
   return (
     <div className="mx-auto max-w-7xl">
       <Cabecalho titulo="Fiscal" descricao="NFC-e, regras de tributação dos produtos e arquivo do SPED Fiscal" />
-      <div className="mb-4 inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+      <div className="mb-4 inline-flex abas" role="tablist">
         {[['regras', 'Regras de tributação'], ['nfce', 'NFC-e: contingência e inutilização'], ['sped', 'SPED Fiscal']].map(([id, nome]) => (
           <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
+            className={`aba ${aba === id ? 'aba-ativa' : ''}`}>{nome}</button>
         ))}
       </div>
       {!empresa ? <p className="text-sm text-tinta-400">Carregando…</p> : aba === 'regras' ? <Regras empresa={empresa} /> : aba === 'nfce' ? <NotasNfce empresa={empresa} /> : <Sped empresa={empresa} recarregar={carregarEmpresa} />}
@@ -169,7 +169,7 @@ function Regras({ empresa }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Regra</th><th>NCM</th><th>CFOP</th><th>ICMS</th><th>PIS e COFINS</th><th className="text-right">Produtos</th><th>Situação</th></tr></thead>
+              <thead><tr><th>Regra</th><th>NCM</th><th>CFOP</th><th>ICMS</th><th>PIS e COFINS</th><th className="text-right">Produtos</th><th>Situação</th></tr></thead>
               <tbody>
                 {regras.map((r) => (
                   <tr key={r.id} onClick={() => editar(r)} className="cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40">

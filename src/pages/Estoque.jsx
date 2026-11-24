@@ -38,10 +38,10 @@ export default function Estoque() {
     <div className="mx-auto max-w-7xl">
       <Cabecalho titulo="Inventário e transferências" descricao="Contagem de estoque com coletor e envio de mercadorias entre filiais" />
       {gestor && (
-        <div className="mb-4 inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+        <div className="mb-4 inline-flex abas" role="tablist">
           {[['inventarios', 'Inventários'], ['transferencias', 'Transferências entre filiais']].map(([id, nome]) => (
             <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
+              className={`aba ${aba === id ? 'aba-ativa' : ''}`}>{nome}</button>
           ))}
         </div>
       )}
@@ -104,7 +104,7 @@ function Inventarios({ gestor }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Nº</th><th>Descrição</th><th>Abrangência</th><th>Aberto em</th><th className="text-right">Itens</th><th className="text-right">Diferença</th><th>Situação</th></tr></thead>
+              <thead><tr><th>Nº</th><th>Descrição</th><th>Abrangência</th><th>Aberto em</th><th className="text-right">Itens</th><th className="text-right">Diferença</th><th>Situação</th></tr></thead>
               <tbody>
                 {visiveis.map((i) => (
                   <tr key={i.id} onClick={() => setAberto(i.id)} className="cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40">
@@ -494,7 +494,7 @@ function Transferencias() {
         ) : (
           <div className="overflow-x-auto">
             <table className="tabela w-full text-[0.95rem]">
-              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Nº</th><th>De</th><th>Para</th><th>Enviada em</th><th className="text-right">Itens</th><th className="text-right">Valor</th><th>Situação</th></tr></thead>
+              <thead><tr><th>Nº</th><th>De</th><th>Para</th><th>Enviada em</th><th className="text-right">Itens</th><th className="text-right">Valor</th><th>Situação</th></tr></thead>
               <tbody>
                 {lista.map((t) => (
                   <tr key={t.id} onClick={() => abrir(t)} className="cursor-pointer hover:bg-papel/60 dark:hover:bg-noite-700/40">
