@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { dinheiro, dataHora } from '../lib/formato.js'
 import { Botao, Campo, TelaSuspensa, useAviso } from '../components/ui.jsx'
+import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
 
 export default function Vendas() {
   const avisar = useAviso()
@@ -28,11 +29,22 @@ export default function Vendas() {
   useEffect(() => { carregar() }, [dia]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const abrir = async (v) => {
-    const [itens, pags] = await Promise.all([
+    const [itens, pags, notas] = await Promise.all([
       supabase.from('venda_itens').select('sequencia, descricao, quantidade, preco_unitario, total').eq('venda_id', v.id).order('sequencia'),
       supabase.from('venda_pagamentos').select('forma, valor').eq('venda_id', v.id),
+      supabase.from('nfce_documentos').select('numero, serie, status, codigo_status, motivo, ambiente').eq('venda_id', v.id).order('criado_em', { ascending: false }).limit(1),
     ])
-    setDetalhe({ ...v, itens: itens.data ?? [], pagamentos: pags.data ?? [] })
+    setDetalhe({ ...v, itens: itens.data ?? [], pagamentos: pags.data ?? [], nfce: notas.data?.[0] ?? null })
+  }
+
+  const [emitindo, setEmitindo] = useState(false)
+  const emitir = async () => {
+    setEmitindo(true)
+    const r = await chamarNfce({ acao: 'emitir', venda_id: detalhe.id })
+    setEmitindo(false)
+    if (r.erro) avisar(r.erro, 'erro')
+    else { avisar(`NFC-e nº ${r.dados.numero} autorizada.`); await imprimirDanfe(detalhe.id) }
+    abrir(detalhe)
   }
 
   const cancelar = async () => {
@@ -84,7 +96,9 @@ export default function Vendas() {
         largura="max-w-2xl"
         rodape={<>
           <Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>
-          {detalhe?.status === 'concluida' && <Botao variante="perigo" onClick={() => setCancelando(detalhe)}>Cancelar venda</Botao>}
+          {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao variante="perigo" onClick={() => setCancelando(detalhe)}>Cancelar venda</Botao>}
+          {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao onClick={emitir} carregando={emitindo}>{detalhe?.nfce ? 'Reenviar NFC-e' : 'Emitir NFC-e'}</Botao>}
+          {detalhe?.nfce?.status === 'autorizada' && <Botao onClick={() => imprimirDanfe(detalhe.id)}>Imprimir DANFE NFC-e</Botao>}
         </>}
       >
         {detalhe && (
@@ -99,6 +113,16 @@ export default function Vendas() {
               <div className="flex justify-between font-bold"><span>Total</span><span>{dinheiro(detalhe.total)}</span></div>
             </div>
             {detalhe.motivo_cancelamento && <p className="text-red-600">Motivo do cancelamento: {detalhe.motivo_cancelamento}</p>}
+            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+              <span className="rotulo">NFC-e</span>
+              {!detalhe.nfce && <p className="text-slate-500">Não emitida</p>}
+              {detalhe.nfce && (
+                <p className={detalhe.nfce.status === 'autorizada' ? 'text-emerald-600' : 'text-red-600'}>
+                  Nº {detalhe.nfce.numero} · {detalhe.nfce.status}{detalhe.nfce.ambiente === 2 ? ' (homologação)' : ''}
+                  {detalhe.nfce.motivo && detalhe.nfce.status !== 'autorizada' ? ` — ${detalhe.nfce.codigo_status ?? ''} ${detalhe.nfce.motivo}` : ''}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </TelaSuspensa>

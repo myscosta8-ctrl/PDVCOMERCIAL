@@ -6,12 +6,14 @@ import PDV from './pages/PDV.jsx'
 import Caixa from './pages/Caixa.jsx'
 import Produtos from './pages/Produtos.jsx'
 import Vendas from './pages/Vendas.jsx'
+import Configuracoes from './pages/Configuracoes.jsx'
 
 const TELAS = [
   { id: 'pdv', nome: 'Frente de caixa', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'caixa', nome: 'Caixa', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'produtos', nome: 'Produtos', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'vendas', nome: 'Vendas', papeis: ['administrador', 'gerente'] },
+  { id: 'configuracoes', nome: 'Configurações', papeis: ['administrador'] },
 ]
 
 export default function App() {
@@ -99,6 +101,7 @@ function Painel() {
         {tela === 'caixa' && <Caixa />}
         {tela === 'produtos' && <Produtos />}
         {tela === 'vendas' && perfil.papel !== 'operador' && <Vendas />}
+        {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}
       </main>
     </div>
   )

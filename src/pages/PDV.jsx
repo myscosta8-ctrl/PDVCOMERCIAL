@@ -4,6 +4,7 @@ import { useCaixaAberto } from '../lib/caixa.js'
 import { adicionar, alterarQuantidade, remover, totais, totalItem, paraEnvio, lerCodigo } from '../lib/carrinho.js'
 import { dinheiro, lerNumero, arred } from '../lib/formato.js'
 import { Botao, Campo, Confirmacao, TelaSuspensa, useAviso } from '../components/ui.jsx'
+import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
 
 const FORMAS = [
   { forma: 'dinheiro', texto: 'Dinheiro', tecla: '1' },
@@ -70,10 +71,23 @@ export default function PDV() {
     setResultados([]); setTermo(''); busca.current?.focus()
   }
 
-  const concluida = (r) => {
-    setUltima(r); setItens([]); setPagamentoAberto(false)
+  const concluida = async (r) => {
+    setUltima({ ...r, nfce: null }); setItens([]); setPagamentoAberto(false)
     avisar(`Venda nº ${r.numero} concluída.`)
     busca.current?.focus()
+    // Emite a NFC-e automaticamente quando a configuração fiscal já foi testada
+    const { data: emp } = await supabase.from('empresas').select('certificado_titular, nfce_csc_id').single()
+    if (!emp?.certificado_titular || !emp?.nfce_csc_id) return
+    setUltima((u) => ({ ...u, nfce: 'emitindo' }))
+    const n = await chamarNfce({ acao: 'emitir', venda_id: r.venda_id })
+    if (n.erro) {
+      setUltima((u) => ({ ...u, nfce: 'erro', nfceErro: n.erro }))
+      avisar(n.erro, 'erro')
+      return
+    }
+    setUltima((u) => ({ ...u, nfce: 'autorizada', nfceNumero: n.dados.numero }))
+    const imp = await imprimirDanfe(r.venda_id)
+    if (imp.erro) avisar(imp.erro, 'erro')
   }
 
   return (
@@ -134,6 +148,11 @@ export default function PDV() {
             <p className="rotulo">Última venda</p>
             <p>Nº {ultima.numero} · {dinheiro(ultima.total)}</p>
             {Number(ultima.troco) > 0 && <p className="text-lg font-bold text-emerald-600">Troco: {dinheiro(ultima.troco)}</p>}
+            {ultima.nfce === 'emitindo' && <p className="mt-1 text-slate-500">Emitindo NFC-e…</p>}
+            {ultima.nfce === 'autorizada' && (
+              <p className="mt-1 text-emerald-600">NFC-e nº {ultima.nfceNumero} autorizada · <button className="underline" onClick={() => imprimirDanfe(ultima.venda_id)}>reimprimir</button></p>
+            )}
+            {ultima.nfce === 'erro' && <p className="mt-1 text-red-600">NFC-e não emitida: {ultima.nfceErro} Reenvie pela tela Vendas.</p>}
           </div>
         )}
       </aside>

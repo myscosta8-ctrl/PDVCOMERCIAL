@@ -12,7 +12,8 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 | `src/components/ui.jsx` | Padrão visual (botões, tela suspensa, lista de escolha, avisos) |
 | `src/lib` | Conexão, carrinho, formatação e caixa |
 | `supabase/migrations` | Estrutura do banco |
-| `supabase/tests` | Testes de banco (rodam só localmente) |
+| `supabase/functions/nfce` | Emissão de NFC-e (Edge Function) |
+| `supabase/tests` | Testes de banco e da assinatura da NFC-e (rodam só localmente) |
 
 ## Regras de segurança do banco
 
@@ -25,7 +26,8 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 ## Roteiro
 
 - [x] Fase 1A — Banco multiempresa, frente de caixa, caixa (abertura, sangria, suprimento, fechamento), produtos, estoque e vendas
-- [ ] Fase 1B — Emissão de NFC-e (certificado A1 no Vault, assinatura e envio pela Edge Function, DANFE NFC-e, cancelamento, contingência)
+- [x] Fase 1B — Emissão de NFC-e: certificado A1 e CSC no cofre (Vault), XML 4.00 assinado, envio à SEFAZ (SVRS) pela Edge Function `nfce`, QR Code e DANFE NFC-e 80 mm
+- [ ] Fase 1B.2 — Cancelamento de NFC-e (evento), inutilização de numeração e contingência off-line
 - [ ] Fase 1C — Entrada de estoque por XML da NF-e, lote e validade na venda, clientes e crediário
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
