@@ -203,6 +203,7 @@ const ICONES = {
   usuario: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
   estoque: 'M3 21V8l9-5 9 5v13M7 21v-8h10v8M7 17h10',
   impressora: 'M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z',
+  grafico: 'M4 20V11M10 20V5M16 20v-6M21 20H3',
   lixo: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
 }
 

@@ -35,6 +35,74 @@ const VENDAS = [
   { id: 'v2', numero: 1043, subtotal: 13.8, desconto: 0, total: 13.8, troco: 6.2, status: 'concluida', criado_em: h(9, 20), operador: { nome: 'Ana Ribeiro' }, pagamentos: [{ forma: 'dinheiro', valor: 20 }], notas: [{ numero: 308, status: 'autorizada' }] },
 ]
 const CAIXA = { id: 'c1', numero_terminal: 1, aberto_em: h(7, 58), valor_abertura: 150, status: 'aberto' }
+
+const dIso = (n) => { const d = new Date(agora); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+const PLANO = [
+  ['1.01', 'Vendas de mercadorias (lançamento manual)', 'receita', 'receita_bruta'], ['1.02', 'Prestação de serviços', 'receita', 'receita_bruta'],
+  ['1.03', 'Rendimentos e juros recebidos', 'receita', 'receitas_financeiras'], ['1.04', 'Outras receitas', 'receita', 'outras_receitas'],
+  ['1.05', 'Aporte dos sócios e empréstimos recebidos', 'receita', 'nao_operacional'], ['2.01', 'Impostos sobre vendas (Simples Nacional/DAS)', 'despesa', 'deducoes'],
+  ['3.01', 'Compras de mercadorias para revenda', 'despesa', 'estoque'], ['3.02', 'Frete sobre compras', 'despesa', 'estoque'],
+  ['4.01', 'Aluguel e condomínio', 'despesa', 'despesas_operacionais'], ['4.02', 'Energia, água, telefone e internet', 'despesa', 'despesas_operacionais'],
+  ['4.03', 'Salários e encargos', 'despesa', 'despesas_operacionais'], ['4.04', 'Pró-labore', 'despesa', 'despesas_operacionais'],
+  ['4.05', 'Contabilidade', 'despesa', 'despesas_operacionais'], ['4.06', 'Sistemas e assinaturas', 'despesa', 'despesas_operacionais'],
+  ['4.07', 'Material de uso, limpeza e embalagens', 'despesa', 'despesas_operacionais'], ['4.08', 'Manutenção e conservação', 'despesa', 'despesas_operacionais'],
+  ['4.09', 'Marketing e publicidade', 'despesa', 'despesas_operacionais'], ['4.10', 'Taxas de cartão e tarifas bancárias', 'despesa', 'despesas_operacionais'],
+  ['4.11', 'Outras despesas operacionais', 'despesa', 'despesas_operacionais'], ['5.01', 'Juros e multas pagos', 'despesa', 'despesas_financeiras'],
+  ['6.01', 'Retirada dos sócios', 'despesa', 'nao_operacional'], ['6.02', 'Pagamento de empréstimos (principal)', 'despesa', 'nao_operacional'],
+  ['6.03', 'Equipamentos e investimentos', 'despesa', 'nao_operacional'],
+].map(([codigo, nome, tipo, grupo_dre], i) => ({ id: `pc${i}`, codigo, nome, tipo, grupo_dre, ativo: true }))
+const pc = (codigo) => { const p = PLANO.find((x) => x.codigo === codigo); return { plano_conta_id: p.id, plano: { codigo: p.codigo, nome: p.nome } } }
+const NF = { fornecedor_id: 'f1', fornecedor: { razao_social: 'Distribuidora Norte Farma Ltda', nome_fantasia: 'Norte Farma' } }
+const L = (id, tipo, descricao, valor, venc, extra = {}) => ({
+  id, tipo, descricao, valor, valor_pago: 0, vencimento: dIso(venc), competencia: dIso(Math.min(venc, 0)), parcela: 1, parcelas: 1, status: 'aberto',
+  documento: null, linha_digitavel: null, observacao: null, centro_custo_id: 'cc1', centro: { nome: 'Loja' }, fornecedor: null, cliente: null, baixas: [], ...extra,
+})
+const LANCAMENTOS = [
+  L('la1', 'pagar', 'Energia elétrica', 486.32, -3, { ...pc('4.02'), documento: 'Fatura 10/2026' }),
+  L('la2', 'pagar', 'Aluguel da loja', 2200, 0, { ...pc('4.01'), valor_pago: 1000, baixas: [{ id: 'b1', data: dIso(-2), valor: 1000, juros: 0, desconto: 0, forma: 'pix', conta_bancaria_id: 'cb2' }] }),
+  L('la3', 'pagar', 'NF-e 88412 duplicata 001', 921.3, 4, { ...pc('3.01'), ...NF, documento: '88412/001', parcela: 1, parcelas: 2 }),
+  L('la4', 'pagar', 'Simples Nacional (DAS)', 1312.4, 6, { ...pc('2.01'), linha_digitavel: '85890000013124003282612410202611000000000004' }),
+  L('la5', 'pagar', 'Contabilidade', 650, 12, { ...pc('4.05') }),
+  L('la6', 'pagar', 'Salários', 4380, 13, { ...pc('4.03') }),
+  L('la7', 'pagar', 'Internet e telefone', 189.9, 18, { ...pc('4.02') }),
+  L('la8', 'pagar', 'NF-e 88412 duplicata 002', 921.3, 34, { ...pc('3.01'), ...NF, documento: '88412/002', parcela: 2, parcelas: 2 }),
+  L('la9', 'pagar', 'Sistema de gestão', 149.9, -10, { ...pc('4.06'), status: 'pago', valor_pago: 149.9, baixas: [{ id: 'b2', data: dIso(-10), valor: 149.9, juros: 0, desconto: 0, forma: 'cartao', conta_bancaria_id: 'cb2' }] }),
+  L('la10', 'receber', 'Aluguel da sala comercial', 900, 2, { ...pc('1.04'), cliente: { nome: 'Clínica Bem-Estar' } }),
+  L('la11', 'receber', 'Aferição de pressão e glicemia', 340, 9, { ...pc('1.02') }),
+]
+const fluxoDemo = ({ p_inicio, p_fim }) => {
+  const dias = []
+  const hoje = dIso(0)
+  for (let d = new Date(`${p_inicio}T12:00:00`); d <= new Date(`${p_fim}T12:00:00`); d.setDate(d.getDate() + 1)) {
+    const dia = d.toISOString().slice(0, 10)
+    const k = d.getDate()
+    const passado = dia <= hoje
+    const lancs = LANCAMENTOS.filter((l) => l.status === 'aberto' && l.vencimento === dia)
+    dias.push({
+      dia,
+      vendas: passado && d.getDay() !== 0 ? 600 + ((k * 137) % 520) : 0,
+      recebimentos: passado && k % 5 === 0 ? 120 : 0,
+      outras_entradas: 0,
+      saidas: passado ? (k % 7 === 3 ? 1450 : k % 3 === 0 ? 210 : 0) : 0,
+      previsto_entradas: lancs.filter((l) => l.tipo === 'receber').reduce((s, l) => s + l.valor - l.valor_pago, 0) + (dia > hoje && d.getDay() !== 0 ? 0 : 0),
+      previsto_saidas: lancs.filter((l) => l.tipo === 'pagar').reduce((s, l) => s + l.valor - l.valor_pago, 0),
+    })
+  }
+  return { dias, vencidos_pagar: 486.32, vencidos_receber: 60 }
+}
+const dreDemo = () => ({
+  meses: Array.from({ length: 12 }, (_, i) => {
+    const rb = 21000 + ((i * 1733) % 6400), dev = 180 + i * 12, ded = Math.round(rb * 0.061), cmv = Math.round(rb * 0.58)
+    const dop = 8600 + ((i * 311) % 900), dfi = 40 + (i % 3) * 25, outras = 900 + (i % 2) * 340
+    const rl = rb - dev - ded
+    return { mes: i + 1, receita_bruta: rb, devolucoes: dev, deducoes: ded, receita_liquida: rl, cmv, lucro_bruto: rl - cmv, despesas_operacionais: dop,
+      resultado_operacional: rl - cmv - dop, despesas_financeiras: dfi, outras_receitas: outras, resultado: rl - cmv - dop - dfi + outras }
+  }),
+  detalhe: Array.from({ length: 12 }, (_, i) => [
+    ['4.01', 'Aluguel e condomínio', 2200], ['4.02', 'Energia, água, telefone e internet', 680 + ((i * 53) % 140)], ['4.03', 'Salários e encargos', 4380],
+    ['4.05', 'Contabilidade', 650], ['4.06', 'Sistemas e assinaturas', 149.9], ['4.10', 'Taxas de cartão e tarifas bancárias', 540 + ((i * 311) % 900) - 149.9],
+  ].map(([codigo, nome, valor]) => ({ mes: i + 1, grupo: 'despesas_operacionais', codigo, nome, valor }))).flat(),
+})
 const TABELAS = {
   usuarios: [{ id: 'u1', nome: 'Carlos Lima', papel: 'administrador', empresa: EMP }],
   empresas: [EMP],
@@ -99,6 +167,13 @@ const TABELAS = {
     { id: 'l1', numero: 'DP2611A', validade: '2026-12-10', quantidade: 34, produto_id: 'p1' },
     { id: 'l2', numero: 'DP2702C', validade: '2027-08-30', quantidade: 50, produto_id: 'p1' },
   ],
+  plano_contas: PLANO,
+  centros_custo: [{ id: 'cc1', nome: 'Loja', ativo: true }, { id: 'cc2', nome: 'Delivery', ativo: true }],
+  contas_bancarias: [
+    { id: 'cb1', nome: 'Caixa da loja', tipo: 'caixa', saldo_inicial: 0, data_saldo: '2026-01-01', ativo: true },
+    { id: 'cb2', nome: 'Banpará, conta 12345-6', tipo: 'banco', saldo_inicial: 8200, data_saldo: '2026-01-01', ativo: true },
+  ],
+  lancamentos: LANCAMENTOS,
   nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
 }
 const RPC = {
@@ -163,6 +238,8 @@ export const clienteDemo = {
         return { produto_id: i.produto_id, preco: promo?.preco ?? p.preco_venda, preco_base: p.preco_venda, origem: promo?.origem ?? 'base', nome: promo?.nome ?? null }
       }), error: null }
     }
+    if (nome === 'fluxo_caixa') return { data: fluxoDemo(args), error: null }
+    if (nome === 'dre') return { data: dreDemo(args), error: null }
     return { data: RPC[nome] ?? null, error: null }
   },
   functions: { invoke: async () => ({ data: { titular: EMP.certificado_titular, validade: EMP.certificado_validade, sefaz: { codigo: '107', mensagem: 'Serviço em Operação' } }, error: null }) },

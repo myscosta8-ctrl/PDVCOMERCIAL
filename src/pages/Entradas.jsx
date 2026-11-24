@@ -47,6 +47,12 @@ export default function Entradas() {
     setDetalhe({ ...n, linhas: data ?? [] })
   }
 
+  const gerarContas = async () => {
+    const { data, error } = await supabase.rpc('gerar_pagar_nota', { p_nota: detalhe.id })
+    if (error) { avisar(mensagemErro(error), 'erro'); return }
+    avisar(`${data} conta(s) a pagar gerada(s) no Financeiro.`)
+  }
+
   const mes = new Date().toISOString().slice(0, 7)
   const doMes = (lista ?? []).filter((n) => n.criado_em.slice(0, 7) === mes)
 
@@ -95,7 +101,10 @@ export default function Entradas() {
       {importacao && <Importacao dados={importacao} onFechar={() => setImportacao(null)} onConcluir={() => { setImportacao(null); carregar() }} />}
 
       <TelaSuspensa aberta={!!detalhe} titulo={detalhe ? `NF-e nº ${detalhe.numero}` : ''} subtitulo={detalhe ? `${detalhe.fornecedor?.razao_social}, emitida em ${dataBR(detalhe.emissao)}` : ''}
-        onFechar={() => setDetalhe(null)} largura="max-w-3xl" rodape={<Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>}>
+        onFechar={() => setDetalhe(null)} largura="max-w-3xl" rodape={<>
+          {gestor && <Botao variante="secundario" className="mr-auto" onClick={gerarContas}>Gerar contas a pagar</Botao>}
+          <Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>
+        </>}>
         {detalhe && (
           <div className="space-y-4">
             <table className="tabela -mx-4 w-[calc(100%+2rem)] text-[0.95rem]">
@@ -216,6 +225,10 @@ function Importacao({ dados, onFechar, onConcluir }) {
     setEnviando(false)
     if (error) { avisar(mensagemErro(error), 'erro'); return }
     avisar(`Nota nº ${nota.numero} lançada: ${data.itens} item(ns), ${data.produtos_novos} produto(s) novo(s).`)
+    // Contas a pagar a partir das duplicatas (ou uma conta em 30 dias se a nota não trouxer)
+    const pg = await supabase.rpc('gerar_pagar_nota', { p_nota: data.nota_id })
+    if (pg.error) avisar(`Contas a pagar não geradas: ${mensagemErro(pg.error)}`, 'erro')
+    else avisar(`${pg.data} conta(s) a pagar gerada(s) no Financeiro.`)
     // Etiquetas dos produtos com preço novo
     const filtros = linhas.filter((l) => !l.produto || calc(l).atualizar)
       .map((l) => (l.produto ? `id.eq.${l.produto.id}` : l.xml.ean ? `ean.eq.${l.xml.ean}` : null)).filter(Boolean)

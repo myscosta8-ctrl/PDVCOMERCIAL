@@ -31,6 +31,7 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Itens 1 a 4 — Devolução e troca (vale-troca), orçamento e pedido, clientes, convênios, crediário com aviso de atraso e recebimento de contas no caixa
 - [x] Grupo A — Entrada de mercadoria pelo XML da NF-e, lote e validade na venda (FEFO), kits, etiquetas e formação de preço
 - [x] Grupo B — Tabelas de preço, promoções (preço, percentual por produto ou categoria, atacado por quantidade) e grade de tamanho e cor
+- [x] Grupo C — Financeiro: contas a pagar e a receber (parcelas, recorrência, leitura de boleto, baixa parcial com juros e desconto), contas geradas pelas notas de compra, fluxo de caixa realizado e previsto, plano de contas, centros de custo e DRE mensal
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes
