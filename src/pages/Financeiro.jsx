@@ -49,7 +49,7 @@ export default function Financeiro() {
   const perfil = useSessao()
   const avisar = useAviso()
   const admin = perfil.papel === 'administrador'
-  const [aba, setAba] = useState('pagar')
+  const [aba, setAba] = useState('geral')
   const [cad, setCad] = useState({ planos: [], centros: [], contas: [], fornecedores: [], clientes: [] })
   const [lancs, setLancs] = useState(null)
   const [cliTitulos, setCliTitulos] = useState([])
@@ -77,7 +77,7 @@ export default function Financeiro() {
   }
   useEffect(() => { carregarCadastros(); carregarLancamentos() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ABAS = [['pagar', 'Contas a pagar'], ['receber', 'Contas a receber'], ['fluxo', 'Fluxo de caixa'], ['dre', 'DRE'], ['cadastros', 'Plano de contas e cadastros']]
+  const ABAS = [['geral', 'Visão geral'], ['pagar', 'Contas a pagar'], ['receber', 'Contas a receber'], ['fluxo', 'Fluxo de caixa'], ['dre', 'DRE'], ['cadastros', 'Plano de contas e cadastros']]
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -91,10 +91,214 @@ export default function Financeiro() {
       {(aba === 'pagar' || aba === 'receber') && (
         <Contas key={aba} tipo={aba} lancs={lancs} cliTitulos={cliTitulos} cad={cad} admin={admin} recarregar={carregarLancamentos} />
       )}
+      {aba === 'geral' && <VisaoGeral admin={admin} irPara={setAba} />}
       {aba === 'fluxo' && <Fluxo />}
       {aba === 'dre' && <Dre centros={cad.centros} />}
       {aba === 'cadastros' && <Cadastros cad={cad} recarregar={carregarCadastros} />}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- Visão geral
+const TIPOS_MOV = [
+  { valor: 'deposito_vendas', texto: 'Entrada das vendas (repasse de cartão, PIX ou depósito do caixa)' },
+  { valor: 'transferencia', texto: 'Transferência entre contas' },
+  { valor: 'ajuste', texto: 'Ajuste de saldo (conferência com o extrato)' },
+]
+function VisaoGeral({ admin, irPara }) {
+  const perfil = useSessao()
+  const avisar = useAviso()
+  const [p, setP] = useState(null)
+  const [mov, setMov] = useState(null)
+  const [metas, setMetas] = useState(null)
+  const [enviando, setEnviando] = useState(false)
+  const carregar = async () => {
+    const { data, error } = await supabase.rpc('painel_financeiro')
+    if (error) avisar(mensagemErro(error), 'erro')
+    setP(data ?? null)
+  }
+  useEffect(() => { carregar() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!p) return <p className="text-sm text-tinta-400">Carregando…</p>
+
+  const saldos = (p.saldos ?? []).filter((c) => c.ativo)
+  const saldoTotal = saldos.reduce((s, c) => s + Number(c.saldo), 0)
+  const aPagar = Number(p.a_pagar_total)
+  const livre = saldoTotal - aPagar
+  // Projeção pelo ritmo: média diária do mês esticada até o último dia (não conta hoje se ainda não vendeu)
+  const dia = Number(p.hoje.slice(8, 10))
+  const base = Math.max(1, Number(p.venda_hoje) > 0 ? dia : dia - 1)
+  const confiavel = base >= 4
+  const projetada = (Number(p.vendas_mes) / base) * p.dias_mes
+  const hist = (p.vendas_3_meses ?? []).map((x) => Number(x.t)).filter((x) => x > 0)
+  const media = hist.length ? hist.reduce((s, x) => s + x, 0) / hist.length : null
+  const comprometido = Number(p.pagos_mes) + Number(p.a_vencer_mes)
+  const teto = Number(p.teto_gastos) || null
+  const pctTeto = teto ? Math.round((comprometido / teto) * 100) : null
+  const metaPct = Number(p.meta_retirada_pct) || null
+  const baseRetirada = saldoTotal - Number(p.a_vencer_mes)
+  const alvo = metaPct ? Math.max(0, baseRetirada * (metaPct / 100)) : null
+  const restante = alvo != null ? alvo - Number(p.retiradas_mes) : null
+  const rotMes = (k) => { const d = new Date(`${p.hoje.slice(0, 7)}-15T12:00:00`); d.setMonth(d.getMonth() + k); return MESES[d.getMonth()] }
+  const despesas = (p.despesas ?? []).map((d) => {
+    const v = (k) => Number(d.meses.find((m) => m.k === k)?.v ?? 0)
+    return { ...d, serie: [-5, -4, -3, -2, -1, 0].map(v), total: [-5, -4, -3, -2, -1, 0].reduce((s, k) => s + v(k), 0) }
+  }).sort((a, b) => b.total - a.total).slice(0, 10)
+  const variacao = (a, b) => (b ? Math.round(((a - b) / b) * 100) : null)
+
+  const salvarMov = async () => {
+    const valor = lerNumero(mov.valor)
+    if (!mov.conta) { avisar('Escolha a conta.', 'erro'); return }
+    if (Number.isNaN(valor) || valor === 0) { avisar('Informe o valor.', 'erro'); return }
+    if (mov.tipo === 'transferencia' && !mov.destino) { avisar('Escolha a conta de destino.', 'erro'); return }
+    const atual = saldos.find((c) => c.id === mov.conta)
+    const v = mov.tipo === 'ajuste' ? arred(valor - Number(atual?.saldo ?? 0)) : valor
+    if (mov.tipo === 'ajuste' && v === 0) { avisar('O saldo informado já é o saldo do sistema.', 'erro'); return }
+    setEnviando(true)
+    const { error } = await supabase.rpc('movimentar_conta', { p_conta: mov.conta, p_valor: v, p_tipo: mov.tipo, p_descricao: mov.descricao || TIPOS_MOV.find((t) => t.valor === mov.tipo).texto.replace(/ \(.*\)$/, ''), p_data: mov.data, p_destino: mov.destino })
+    setEnviando(false)
+    if (error) { avisar(mensagemErro(error), 'erro'); return }
+    avisar('Movimento registrado.'); setMov(null); carregar()
+  }
+  const salvarMetas = async () => {
+    const t = metas.teto === '' ? null : lerNumero(metas.teto)
+    const r = metas.retirada === '' ? null : lerNumero(metas.retirada)
+    if ((t != null && !(t >= 0)) || (r != null && !(r >= 0 && r <= 100))) { avisar('Valores inválidos.', 'erro'); return }
+    setEnviando(true)
+    const { error } = await supabase.from('empresas').update({ teto_gastos: t, meta_retirada_pct: r }).eq('id', perfil.empresa.id)
+    setEnviando(false)
+    if (error) { avisar(mensagemErro(error), 'erro'); return }
+    avisar('Metas salvas.'); setMetas(null); carregar()
+  }
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Indicador titulo="Saldo nas contas" icone="dinheiro" tom={saldoTotal < 0 ? 'critico' : 'neutro'} valor={dinheiro(saldoTotal)} detalhe={`${saldos.length} conta(s) e caixa(s)`} />
+        <Indicador titulo="Caixa livre" icone="ok" tom={livre < 0 ? 'critico' : 'positivo'} valor={dinheiro(livre)} detalhe={`Saldo menos ${dinheiro(aPagar)} a pagar`} />
+        <Indicador titulo="A receber" icone="relogio" valor={dinheiro(p.a_receber_total)} detalhe="Lançamentos, crediário e convênio" />
+        <Indicador titulo="Vendas no mês" icone="vendas" valor={dinheiro(p.vendas_mes)} detalhe={`${p.dias_com_venda} dia(s) com venda`} />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="cartao overflow-hidden">
+          <div className="flex items-center justify-between border-b border-papel-200 px-4 py-3 dark:border-noite-700">
+            <p className="font-semibold">Contas e saldos</p>
+            <Botao variante="secundario" icone="mais" className="py-1" onClick={() => setMov({ tipo: 'deposito_vendas', conta: saldos.find((c) => c.tipo === 'banco')?.id ?? saldos[0]?.id ?? null, destino: null, valor: '', descricao: '', data: hojeISO() })}>Movimentar</Botao>
+          </div>
+          {saldos.length === 0 ? <p className="p-4 text-sm text-tinta-400">Cadastre contas na aba Plano de contas e cadastros.</p> : (
+            <ul className="divide-y divide-papel-200 dark:divide-noite-700">
+              {saldos.map((c) => (
+                <li key={c.id} className="flex items-center justify-between px-4 py-3">
+                  <span>{c.nome}<span className="block text-xs text-tinta-400">{{ caixa: 'Caixa', banco: 'Conta bancária', carteira: 'Carteira digital' }[c.tipo]}</span></span>
+                  <span className={`num font-semibold ${Number(c.saldo) < 0 ? 'text-rubro-600 dark:text-rubro-300' : ''}`}>{dinheiro(c.saldo)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="border-t border-papel-200 px-4 py-2 text-xs text-tinta-400 dark:border-noite-700">Saldo inicial + pagamentos e recebimentos baixados na conta + movimentos.</p>
+        </div>
+
+        <div className="cartao p-4">
+          <p className="font-semibold">Projeção do mês</p>
+          {!confiavel ? <p className="mt-2 text-sm text-tinta-400">Ainda cedo no mês ({base} dia(s) de venda). A projeção fica confiável a partir do 4º dia.</p> : <>
+            <p className="mt-2 text-sm text-tinta-400">No ritmo atual, as vendas devem fechar em</p>
+            <p className="num text-[1.9rem] font-semibold leading-tight">{dinheiro(projetada)}</p>
+            {media && (() => { const v = variacao(projetada, media); return <p className="text-sm"><Etiqueta tom={v > 0 ? 'positivo' : v < 0 ? 'critico' : 'neutro'}>{v > 0 ? '+' : ''}{v}% frente à média dos últimos {hist.length} mês(es)</Etiqueta></p> })()}
+          </>}
+          <div className="mt-3 space-y-1.5 border-t border-papel-200 pt-3 text-sm dark:border-noite-700">
+            <p className="flex justify-between"><span>Despesas já pagas no mês</span><span className="num">{dinheiro(p.pagos_mes)}</span></p>
+            <p className="flex justify-between"><span>Ainda vencem até o fim do mês</span><span className="num">{dinheiro(p.a_vencer_mes)}</span></p>
+            <p className="flex justify-between"><span>Compras de mercadoria pagas</span><span className="num text-tinta-400">{dinheiro(p.compras_mes)}</span></p>
+            {confiavel && <p className="flex justify-between font-semibold"><span>Vendas projetadas menos despesas</span><span className={`num ${projetada - comprometido < 0 ? 'text-rubro-600 dark:text-rubro-300' : 'text-caixa-600 dark:text-caixa-300'}`}>{dinheiro(projetada - comprometido)}</span></p>}
+          </div>
+          <p className="mt-2 text-xs text-tinta-400">Despesas sem compras de mercadoria, que voltam como venda. Não considera sazonalidade.</p>
+        </div>
+
+        <div className="cartao p-4">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold">Metas do mês</p>
+            {admin && <Botao variante="secundario" className="py-1" onClick={() => setMetas({ teto: teto ? reais(teto) : '', retirada: metaPct ? String(metaPct).replace('.', ',') : '' })}>Definir metas</Botao>}
+          </div>
+          <div className="mt-3">
+            <p className="flex justify-between text-sm"><span>Teto de gastos</span><strong className={`num ${pctTeto > 100 ? 'text-rubro-600 dark:text-rubro-300' : ''}`}>{teto ? `${pctTeto}%` : 'não definido'}</strong></p>
+            {teto && <>
+              <div className="mt-1.5 h-2 w-full rounded-full bg-papel-200 dark:bg-noite-700"><div className={`h-2 rounded-full ${pctTeto > 100 ? 'bg-rubro-600' : pctTeto > 85 ? 'bg-ambar-600' : 'bg-caixa-500'}`} style={{ width: `${Math.min(100, pctTeto)}%` }} /></div>
+              <p className="mt-1 text-xs text-tinta-400">{dinheiro(comprometido)} comprometidos de {dinheiro(teto)}</p>
+            </>}
+          </div>
+          <div className="mt-4 border-t border-papel-200 pt-3 dark:border-noite-700">
+            <p className="flex justify-between text-sm"><span>Retirada dos sócios</span><strong className="num">{metaPct ? `${String(metaPct).replace('.', ',')}% do disponível` : 'meta não definida'}</strong></p>
+            <div className="mt-2 space-y-1 text-sm">
+              <p className="flex justify-between"><span>Já retirado no mês</span><span className="num">{dinheiro(p.retiradas_mes)}</span></p>
+              {alvo != null && <>
+                <p className="flex justify-between"><span>Meta do mês</span><span className="num">{dinheiro(alvo)}</span></p>
+                <p className="flex justify-between font-semibold"><span>{restante >= 0 ? 'Ainda cabe retirar' : 'Passou da meta em'}</span><span className={`num ${restante >= 0 ? 'text-caixa-600 dark:text-caixa-300' : 'text-rubro-600 dark:text-rubro-300'}`}>{dinheiro(Math.abs(restante))}</span></p>
+              </>}
+            </div>
+            <p className="mt-2 text-xs text-tinta-400">Base: saldo nas contas menos o que vence até o fim do mês. Conta pró-labore (4.04) e retirada dos sócios (6.01).</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 cartao overflow-hidden">
+        <div className="flex items-center justify-between border-b border-papel-200 px-4 py-3 dark:border-noite-700">
+          <div><p className="font-semibold">Despesas por conta nos últimos 6 meses</p><p className="text-sm text-tinta-400">Por competência, sem compras de mercadoria. Variação do mês atual frente ao anterior.</p></div>
+          <Botao variante="secundario" className="py-1" onClick={() => irPara('dre')}>Ver DRE</Botao>
+        </div>
+        {despesas.length === 0 ? <Vazio icone="grafico" titulo="Sem despesas lançadas" texto="As despesas aparecem aqui conforme forem lançadas em Contas a pagar." /> : (
+          <div className="overflow-x-auto">
+            <table className="tabela w-full whitespace-nowrap text-[0.95rem]">
+              <thead className="bg-papel/70 dark:bg-noite/40"><tr><th>Conta</th>{[-5, -4, -3, -2, -1, 0].map((k) => <th key={k} className="text-right">{rotMes(k)}</th>)}<th className="text-right">Variação</th></tr></thead>
+              <tbody>
+                {despesas.map((d) => {
+                  const v = variacao(d.serie[5], d.serie[4])
+                  return (
+                    <tr key={d.codigo}>
+                      <td><span className="text-tinta-400">{d.codigo}</span> {d.nome}</td>
+                      {d.serie.map((x, k) => <td key={k} className={`num text-right ${k === 5 ? 'font-semibold' : ''}`}>{x ? x.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>)}
+                      <td className="text-right">{v == null ? '—' : <Etiqueta tom={v > 10 ? 'critico' : v < -10 ? 'positivo' : 'neutro'}>{v > 0 ? '+' : ''}{v}%</Etiqueta>}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <TelaSuspensa aberta={!!mov} titulo="Movimentar conta" subtitulo="Dinheiro que entra ou muda de conta sem passar por um lançamento" onFechar={() => setMov(null)}
+        rodape={<>
+          <Botao variante="secundario" onClick={() => setMov(null)}>Cancelar</Botao>
+          <Botao onClick={salvarMov} carregando={enviando}>Registrar</Botao>
+        </>}>
+        {mov && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2"><Campo rotulo="Tipo"><Lista valor={mov.tipo} opcoes={TIPOS_MOV} onMudar={(v) => setMov((m) => ({ ...m, tipo: v }))} /></Campo></div>
+            <Campo rotulo={mov.tipo === 'transferencia' ? 'Sai da conta' : 'Conta'}><Lista valor={mov.conta} opcoes={saldos.map((c) => ({ valor: c.id, texto: c.nome }))} onMudar={(v) => setMov((m) => ({ ...m, conta: v }))} /></Campo>
+            {mov.tipo === 'transferencia'
+              ? <Campo rotulo="Entra na conta"><Lista valor={mov.destino} opcoes={saldos.filter((c) => c.id !== mov.conta).map((c) => ({ valor: c.id, texto: c.nome }))} onMudar={(v) => setMov((m) => ({ ...m, destino: v }))} /></Campo>
+              : <Campo rotulo="Data"><input type="date" className="campo" value={mov.data} onChange={(e) => setMov((m) => ({ ...m, data: e.target.value }))} /></Campo>}
+            <Campo rotulo={mov.tipo === 'ajuste' ? 'Saldo correto no extrato' : 'Valor'} ajuda={mov.tipo === 'ajuste' ? `Saldo no sistema: ${dinheiro(saldos.find((c) => c.id === mov.conta)?.saldo ?? 0)}` : null}>
+              <input className="campo num" inputMode="decimal" value={mov.valor} onChange={(e) => setMov((m) => ({ ...m, valor: e.target.value }))} placeholder="0,00" />
+            </Campo>
+            <Campo rotulo="Descrição"><input className="campo" value={mov.descricao} onChange={(e) => setMov((m) => ({ ...m, descricao: e.target.value }))} placeholder={mov.tipo === 'deposito_vendas' ? 'Ex.: Repasse da maquininha' : ''} /></Campo>
+          </div>
+        )}
+      </TelaSuspensa>
+
+      <TelaSuspensa aberta={!!metas} titulo="Metas financeiras" subtitulo="Valem para todos os meses até serem alteradas" onFechar={() => setMetas(null)}
+        rodape={<>
+          <Botao variante="secundario" onClick={() => setMetas(null)}>Cancelar</Botao>
+          <Botao onClick={salvarMetas} carregando={enviando}>Salvar metas</Botao>
+        </>}>
+        {metas && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo rotulo="Teto de gastos mensal (R$)" ajuda="Despesas pagas e a vencer no mês, sem mercadoria"><input className="campo num" inputMode="decimal" value={metas.teto} onChange={(e) => setMetas((m) => ({ ...m, teto: e.target.value }))} placeholder="Sem teto" /></Campo>
+            <Campo rotulo="Meta de retirada (%)" ajuda="Do saldo disponível no mês"><input className="campo num" inputMode="decimal" value={metas.retirada} onChange={(e) => setMetas((m) => ({ ...m, retirada: e.target.value }))} placeholder="Sem meta" /></Campo>
+          </div>
+        )}
+      </TelaSuspensa>
+    </>
   )
 }
 
@@ -139,6 +343,7 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
   const novo = () => setForm({
     tipo, descricao: '', pessoa_id: null, plano_conta_id: null, centro_custo_id: cad.centros.find((c) => c.ativo)?.id ?? null,
     documento: '', linha_digitavel: '', valor: '', vencimento: hoje, competencia: hoje, repeticao: 'unica', vezes: '2', observacao: '',
+    ja_pago: false, conta_pagamento: (cad.contas.find((c) => c.ativo && c.tipo === 'banco') ?? cad.contas.find((c) => c.ativo))?.id ?? null, forma: pagar ? 'pix' : 'pix',
   })
   const editar = (l) => setForm({
     id: l.id, tipo, descricao: l.descricao, pessoa_id: pagar ? l.fornecedor_id : l.cliente_id, plano_conta_id: l.plano_conta_id,
@@ -233,7 +438,7 @@ function Contas({ tipo, lancs, cliTitulos, cad, admin, recarregar }) {
         </div>
       )}
 
-      {form && <FormLancamento form={form} setForm={setForm} cad={cad} onSalvo={() => { setForm(null); setDetalhe(null); recarregar() }} />}
+      {form && <FormLancamento form={form} setForm={setForm} cad={cad} lancs={lancs ?? []} onSalvo={() => { setForm(null); setDetalhe(null); recarregar() }} />}
 
       <TelaSuspensa aberta={!!detalhe} titulo={detalhe?.descricao ?? ''} subtitulo={detalhe ? `${pessoa(detalhe)}, vencimento ${dataBR(detalhe.vencimento)}` : ''} onFechar={() => setDetalhe(null)} largura="max-w-2xl"
         rodape={detalhe && <>
@@ -293,9 +498,38 @@ function Dado({ rotulo, valor, forte }) {
   return <div><p className="text-xs text-tinta-400">{rotulo}</p><p className={`num ${forte ? 'font-semibold' : ''}`}>{valor}</p></div>
 }
 
-function FormLancamento({ form, setForm, cad, onSalvo }) {
+// Sugere fornecedor, plano e centro a partir do histórico (mesmo cedente do boleto, mesmo fornecedor ou mesma descrição)
+function sugestaoDoHistorico(lancs, tipo, { boleto, pessoa_id, descricao }) {
+  const doTipo = lancs.filter((l) => l.tipo === tipo && l.status !== 'cancelado').sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1))
+  if (boleto?.tipo === 'bancario') {
+    const livre = boleto.codigoBarras.slice(19)
+    let melhor = null, ponto = 0, segundo = 0
+    for (const l of doTipo) {
+      const b = l.linha_digitavel && lerBoleto(l.linha_digitavel)
+      if (!b?.valido || b.banco !== boleto.banco) continue
+      const outro = b.codigoBarras.slice(19)
+      let iguais = 0
+      for (let k = 0; k < 25; k++) if (outro[k] === livre[k]) iguais++
+      if (iguais > ponto) { segundo = ponto; ponto = iguais; melhor = l } else if (iguais > segundo && l.fornecedor_id !== melhor?.fornecedor_id) segundo = iguais
+    }
+    if (melhor && ponto >= 13 && ponto - segundo >= 2) return { ...melhor, motivo: 'mesmo cedente do boleto' }
+  }
+  if (pessoa_id) {
+    const l = doTipo.find((x) => (tipo === 'pagar' ? x.fornecedor_id : x.cliente_id) === pessoa_id)
+    if (l) return { ...l, motivo: 'último lançamento deste fornecedor' }
+  }
+  const d = descricao?.trim().toLowerCase()
+  if (d && d.length >= 4) {
+    const l = doTipo.find((x) => x.descricao.toLowerCase().startsWith(d))
+    if (l) return { ...l, motivo: 'lançamento parecido' }
+  }
+  return null
+}
+
+function FormLancamento({ form, setForm, cad, lancs, onSalvo }) {
   const avisar = useAviso()
   const [enviando, setEnviando] = useState(false)
+  const [repetido, setRepetido] = useState(null)
   const pagar = form.tipo === 'pagar'
   const mudar = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e?.target ? e.target.value : e }))
   const boleto = form.linha_digitavel ? lerBoleto(form.linha_digitavel) : null
@@ -304,15 +538,29 @@ function FormLancamento({ form, setForm, cad, onSalvo }) {
     ? cad.fornecedores.map((f) => ({ valor: f.id, texto: f.nome_fantasia || f.razao_social }))
     : cad.clientes.map((c) => ({ valor: c.id, texto: c.nome }))
 
+  // Completa só o que ainda está vazio, para não desfazer o que a pessoa escolheu
+  const aplicarSugestao = (f, sug) => (!sug || f.id ? f : {
+    ...f,
+    pessoa_id: f.pessoa_id ?? (pagar ? sug.fornecedor_id : sug.cliente_id) ?? null,
+    plano_conta_id: f.plano_conta_id ?? sug.plano_conta_id,
+    centro_custo_id: f.centro_custo_id ?? sug.centro_custo_id,
+    descricao: f.descricao || sug.descricao.replace(/ duplicata .*$/, ''),
+    sugestao: sug.motivo,
+  })
   const lerLinha = (e) => {
     const texto = e.target.value
     const b = lerBoleto(texto)
-    setForm((f) => ({
-      ...f, linha_digitavel: texto,
-      ...(b?.valido && b.valor ? { valor: reais(b.valor) } : {}),
-      ...(b?.valido && b.vencimento ? { vencimento: b.vencimento } : {}),
-    }))
+    setForm((f) => {
+      const base = {
+        ...f, linha_digitavel: texto,
+        ...(b?.valido && b.valor ? { valor: reais(b.valor) } : {}),
+        ...(b?.valido && b.vencimento ? { vencimento: b.vencimento } : {}),
+      }
+      return b?.valido ? aplicarSugestao(base, sugestaoDoHistorico(lancs, f.tipo, { boleto: b })) : base
+    })
   }
+  const escolherPessoa = (v) => setForm((f) => aplicarSugestao({ ...f, pessoa_id: v }, v ? sugestaoDoHistorico(lancs, f.tipo, { pessoa_id: v }) : null))
+  const sairDescricao = () => setForm((f) => (f.plano_conta_id ? f : aplicarSugestao(f, sugestaoDoHistorico(lancs, f.tipo, { descricao: f.descricao }))))
 
   const valor = lerNumero(form.valor)
   const vezes = form.repeticao === 'unica' || form.id ? 1 : Math.max(1, Math.min(120, parseInt(form.vezes, 10) || 1))
@@ -327,13 +575,20 @@ function FormLancamento({ form, setForm, cad, onSalvo }) {
     }))
   }, [valor, vezes, form.repeticao, form.vencimento, form.competencia])
 
-  const salvar = async () => {
+  const salvar = async (confirmado) => {
     if (!form.descricao.trim()) { avisar('Informe a descrição.', 'erro'); return }
     if (!form.plano_conta_id) { avisar('Escolha a conta do plano de contas.', 'erro'); return }
     if (!(valor > 0)) { avisar('Informe um valor maior que zero.', 'erro'); return }
     if (!form.vencimento || !form.competencia) { avisar('Informe vencimento e competência.', 'erro'); return }
     if (form.linha_digitavel && !boleto?.valido) { avisar('A linha digitável não confere. Verifique os números ou deixe em branco.', 'erro'); return }
     if (form.id && valor < Number(form.valor_pago)) { avisar('O valor não pode ficar menor que o já pago.', 'erro'); return }
+    if (form.ja_pago && !form.conta_pagamento) { avisar(`Escolha a conta de onde ${pagar ? 'saiu' : 'entrou'} o dinheiro.`, 'erro'); return }
+    if (!form.id && confirmado !== true) {
+      const dup = lancs.find((l) => l.tipo === form.tipo && l.status !== 'cancelado' && Math.abs(Number(l.valor) - parcelas[0]?.valor) < 0.005
+        && l.vencimento === parcelas[0]?.vencimento
+        && ((form.pessoa_id && (pagar ? l.fornecedor_id : l.cliente_id) === form.pessoa_id) || l.descricao.trim().toLowerCase() === form.descricao.trim().toLowerCase()))
+      if (dup) { setRepetido(dup); return }
+    }
     const comum = {
       descricao: form.descricao.trim(), plano_conta_id: form.plano_conta_id, centro_custo_id: form.centro_custo_id,
       fornecedor_id: pagar ? form.pessoa_id : null, cliente_id: pagar ? null : form.pessoa_id,
@@ -348,7 +603,12 @@ function FormLancamento({ form, setForm, cad, onSalvo }) {
       r = await supabase.from('lancamentos').insert(parcelas.map((p, i) => ({
         ...comum, tipo: form.tipo, valor: p.valor, vencimento: p.vencimento, competencia: p.competencia,
         parcela: p.parcela, parcelas: vezes, grupo_id: grupo, linha_digitavel: i === 0 ? comum.linha_digitavel : null,
-      })))
+      }))).select('id, valor')
+      // "Já pago": registra a baixa da primeira parcela na hora
+      if (!r.error && form.ja_pago && r.data?.[0]) {
+        const b = await supabase.rpc('baixar_lancamento', { p_lancamento: r.data[0].id, p_valor: r.data[0].valor, p_data: form.vencimento <= hojeISO() ? form.vencimento : hojeISO(), p_conta: form.conta_pagamento, p_forma: form.forma, p_juros: 0, p_desconto: 0 })
+        if (b.error) avisar(`Lançado, mas o pagamento não foi registrado: ${mensagemErro(b.error)}`, 'erro')
+      }
     }
     setEnviando(false)
     if (r.error) { avisar(r.error.code === '23505' ? 'Este boleto já foi lançado.' : mensagemErro(r.error), 'erro'); return }
@@ -361,7 +621,7 @@ function FormLancamento({ form, setForm, cad, onSalvo }) {
       subtitulo={pagar ? 'Digite ou cole a linha do boleto para preencher valor e vencimento' : 'Receitas que não passam pelo caixa'} onFechar={() => setForm(null)} largura="max-w-3xl"
       rodape={<>
         <Botao variante="secundario" onClick={() => setForm(null)}>Cancelar</Botao>
-        <Botao onClick={salvar} carregando={enviando}>{form.id ? 'Salvar alterações' : vezes > 1 ? `Criar ${vezes} lançamentos` : 'Salvar lançamento'}</Botao>
+        <Botao onClick={() => salvar()} carregando={enviando}>{form.id ? 'Salvar alterações' : vezes > 1 ? `Criar ${vezes} lançamentos` : 'Salvar lançamento'}</Botao>
       </>}>
       <div className="space-y-4">
         {pagar && (
@@ -371,8 +631,8 @@ function FormLancamento({ form, setForm, cad, onSalvo }) {
           </Campo>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Campo rotulo="Descrição"><input className="campo" value={form.descricao} onChange={mudar('descricao')} placeholder={pagar ? 'Ex.: Aluguel da loja' : 'Ex.: Aluguel da sala comercial'} autoFocus /></Campo>
-          <Campo rotulo={pagar ? 'Fornecedor (opcional)' : 'Cliente (opcional)'}><Lista valor={form.pessoa_id} opcoes={[{ valor: null, texto: 'Nenhum' }, ...pessoas]} onMudar={mudar('pessoa_id')} /></Campo>
+          <Campo rotulo="Descrição"><input className="campo" value={form.descricao} onChange={mudar('descricao')} onBlur={sairDescricao} placeholder={pagar ? 'Ex.: Aluguel da loja' : 'Ex.: Aluguel da sala comercial'} autoFocus /></Campo>
+          <Campo rotulo={pagar ? 'Fornecedor (opcional)' : 'Cliente (opcional)'}><Lista valor={form.pessoa_id} opcoes={[{ valor: null, texto: 'Nenhum' }, ...pessoas]} onMudar={escolherPessoa} /></Campo>
           <Campo rotulo="Plano de contas"><Lista valor={form.plano_conta_id} opcoes={planos.map((p) => ({ valor: p.id, texto: `${p.codigo} ${p.nome}` }))} onMudar={mudar('plano_conta_id')} /></Campo>
           <Campo rotulo="Centro de custo"><Lista valor={form.centro_custo_id} opcoes={[{ valor: null, texto: 'Nenhum' }, ...cad.centros.filter((c) => c.ativo).map((c) => ({ valor: c.id, texto: c.nome }))]} onMudar={mudar('centro_custo_id')} /></Campo>
         </div>
@@ -397,7 +657,22 @@ function FormLancamento({ form, setForm, cad, onSalvo }) {
           </div>
         )}
         <Campo rotulo="Observação"><input className="campo" value={form.observacao} onChange={mudar('observacao')} /></Campo>
+        {form.sugestao && <p className="flex items-center gap-2 text-sm text-caixa-600 dark:text-caixa-300"><Icone nome="ok" className="h-4 w-4" />Campos completados pelo {form.sugestao}. Confira antes de salvar.</p>}
+        {!form.id && (
+          <div className="rounded-lg border border-papel-200 p-3 dark:border-noite-700">
+            <label className="flex items-center gap-2 font-medium"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={form.ja_pago} onChange={(e) => setForm((f) => ({ ...f, ja_pago: e.target.checked }))} />
+              {pagar ? 'Já está pago' : 'Já foi recebido'}{vezes > 1 ? ' (só a 1ª parcela)' : ''}</label>
+            {form.ja_pago && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Campo rotulo={pagar ? 'Saiu da conta' : 'Entrou na conta'}><Lista valor={form.conta_pagamento} opcoes={cad.contas.filter((c) => c.ativo).map((c) => ({ valor: c.id, texto: c.nome }))} onMudar={mudar('conta_pagamento')} /></Campo>
+                <Campo rotulo="Forma"><Lista valor={form.forma} opcoes={FORMAS} onMudar={mudar('forma')} /></Campo>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      <Confirmacao aberta={!!repetido} titulo="Possível lançamento repetido" textoConfirmar="Lançar mesmo assim" onCancelar={() => setRepetido(null)} onConfirmar={() => { setRepetido(null); salvar(true) }}
+        mensagem={repetido ? `Já existe "${repetido.descricao}" de ${dinheiro(repetido.valor)} com vencimento em ${dataBR(repetido.vencimento)}${repetido.status === 'pago' ? ', já pago' : ''}. Lançar de novo pode duplicar a conta.` : ''} />
     </TelaSuspensa>
   )
 }

@@ -174,6 +174,30 @@ const TABELAS = {
     { id: 'cb2', nome: 'Banpará, conta 12345-6', tipo: 'banco', saldo_inicial: 8200, data_saldo: '2026-01-01', ativo: true },
   ],
   lancamentos: LANCAMENTOS,
+  inventarios: [
+    { id: 'iv2', numero: 4, descricao: 'Inventário de novembro de 2026', escopo: 'todos', categoria_id: null, status: 'aberto', criado_em: h(8, 5), finalizado_em: null, resumo: null, itens: [{ count: 8 }] },
+    { id: 'iv1', numero: 3, descricao: 'Higiene e beleza', escopo: 'categoria', categoria_id: 'k2', status: 'finalizado', criado_em: '2026-10-28T11:00:00Z', finalizado_em: '2026-10-28T19:30:00Z', resumo: { itens_ajustados: 4, sobra_qtd: 3, falta_qtd: 7, sobra_valor: 41.2, falta_valor: 187.9 }, itens: [{ count: 46 }] },
+  ],
+  inventario_itens: PRODUTOS.filter((p) => !p.e_grade && !p.produto_pai_id).map((p, k) => ({
+    id: `ii${k}`, inventario_id: 'iv2', produto_id: p.id, produto: p,
+    estoque_sistema: k < 5 ? p.estoque_atual : null, contado: [84, 10, null, 1, 9, 7, null, 31][k] ?? null, ajuste: null, custo_unitario: null,
+  })).map((i) => (i.contado == null ? { ...i, estoque_sistema: null } : i)),
+  inventario_leituras: [
+    { id: 'lt3', produto_id: 'p6', modo: 'somar', quantidade: 1, criado_em: h(9, 42), produto: { descricao: 'Protetor solar FPS 50, 120 ml' } },
+    { id: 'lt2', produto_id: 'p5', modo: 'definir', quantidade: 9, criado_em: h(9, 40), produto: { descricao: 'Clonazepam 2 mg, 30 comprimidos' } },
+    { id: 'lt1', produto_id: 'p4', modo: 'somar', quantidade: 1, criado_em: h(9, 38), produto: { descricao: 'Álcool etílico 70%, 1 litro' } },
+    { id: 'lt0', produto_id: 'p2', modo: 'somar', quantidade: 10, criado_em: h(9, 31), produto: { descricao: 'Paracetamol 750 mg, 20 comprimidos' } },
+  ],
+  transferencias: [
+    { id: 'tr3', numero: 12, empresa_origem_id: 'e2', empresa_destino_id: 'e1', origem_nome: 'Farma Família Centro', destino_nome: 'Farma Família', status: 'enviada', enviado_em: h(10, 12), valor_total: 412.6, divergencias: 0, observacao: 'Reposição de vitaminas', itens: [{ count: 4 }] },
+    { id: 'tr2', numero: 31, empresa_origem_id: 'e1', empresa_destino_id: 'e2', origem_nome: 'Farma Família', destino_nome: 'Farma Família Centro', status: 'enviada', enviado_em: h(8, 50), valor_total: 156.4, divergencias: 0, itens: [{ count: 2 }] },
+    { id: 'tr1', numero: 30, empresa_origem_id: 'e1', empresa_destino_id: 'e2', origem_nome: 'Farma Família', destino_nome: 'Farma Família Centro', status: 'recebida', enviado_em: '2026-11-19T13:00:00Z', valor_total: 980, divergencias: 1, itens: [{ count: 7 }] },
+  ],
+  transferencia_itens: [
+    { id: 'ti1', descricao: 'Vitamina C 1 g efervescente, 10 comprimidos', ean: '7896112402158', unidade: 'UN', quantidade: 24, quantidade_recebida: null, lote_numero: 'VC2611', validade: '2027-06-30' },
+    { id: 'ti2', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', ean: '7896004700120', unidade: 'UN', quantidade: 40, quantidade_recebida: null, lote_numero: 'DP2702C', validade: '2027-08-30' },
+    { id: 'ti3', descricao: 'Soro fisiológico 0,9%, 500 ml', ean: '7896181900012', unidade: 'UN', quantidade: 12, quantidade_recebida: null, lote_numero: null, validade: null },
+  ],
   nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
 }
 const RPC = {
@@ -196,6 +220,22 @@ const RPC = {
   situacao_cliente: { limite: 500, saldo_devedor: 65.5, disponivel: 434.5, em_atraso: 0, dias_atraso: 0, vale: 30, bloqueado: false, convenio: null },
   credenciais_configuradas: { certificado: true, senha: true, csc: true },
   lotes_alerta: { vencidos: 1, vencendo: 3, lista: [] },
+  filiais: [{ id: 'e2', nome: 'Farma Família Centro', cnpj: '12345678000276' }],
+  painel_financeiro: {
+    hoje: new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 10), dias_mes: 30,
+    vendas_mes: 18240.5, dias_com_venda: 21, venda_hoje: 768, vendas_3_meses: [{ m: '2026-08-01', t: 21900 }, { m: '2026-09-01', t: 22840 }, { m: '2026-10-01', t: 23710 }],
+    pagos_mes: 6120.4, a_vencer_mes: 2152.3, compras_mes: 7480, retiradas_mes: 1500, a_pagar_total: 12520.82, a_receber_total: 1587.8,
+    teto_gastos: 9000, meta_retirada_pct: 30,
+    saldos: [
+      { id: 'cb2', nome: 'Banpará, conta 12345-6', tipo: 'banco', ativo: true, saldo: 14380.55 },
+      { id: 'cb1', nome: 'Caixa da loja', tipo: 'caixa', ativo: true, saldo: 157.7 },
+    ],
+    despesas: [
+      ['4.01', 'Aluguel e condomínio', [2200, 2200, 2200, 2200, 2200, 2200]], ['4.02', 'Energia, água, telefone e internet', [702, 655, 731, 688, 640, 676.22]],
+      ['4.03', 'Salários e encargos', [4380, 4380, 4380, 4380, 4380, 4380]], ['4.05', 'Contabilidade', [650, 650, 650, 650, 650, 650]],
+      ['4.10', 'Taxas de cartão e tarifas bancárias', [512, 498, 560, 531, 545, 640.1]], ['2.01', 'Impostos sobre vendas (Simples Nacional/DAS)', [1201, 1275, 1340, 1298, 1312.4, 0]],
+    ].map(([codigo, nome, v]) => ({ codigo, nome, meses: v.map((x, i) => ({ k: i - 5, v: x })) })),
+  },
 }
 
 function consulta(tabela) {

@@ -15,6 +15,7 @@ import Orcamentos from './pages/Orcamentos.jsx'
 import Entradas from './pages/Entradas.jsx'
 import Precos from './pages/Precos.jsx'
 import Financeiro from './pages/Financeiro.jsx'
+import Estoque from './pages/Estoque.jsx'
 
 const TELAS = [
   { id: 'inicio', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
@@ -25,6 +26,7 @@ const TELAS = [
   { id: 'produtos', nome: 'Produtos', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'precos', nome: 'Preços e promoções', icone: 'dinheiro', papeis: ['administrador', 'gerente'] },
   { id: 'entradas', nome: 'Entrada de mercadorias', icone: 'estoque', papeis: ['administrador', 'gerente'] },
+  { id: 'estoque', nome: 'Inventário', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'financeiro', nome: 'Financeiro', icone: 'grafico', papeis: ['administrador', 'gerente'] },
   { id: 'vendas', nome: 'Vendas', icone: 'vendas', papeis: ['administrador', 'gerente'] },
   { id: 'configuracoes', nome: 'Configurações', icone: 'configuracoes', papeis: ['administrador'] },
@@ -156,6 +158,7 @@ function Painel() {
           {tela === 'produtos' && <Produtos />}
           {tela === 'entradas' && perfil.papel !== 'operador' && <Entradas />}
           {tela === 'precos' && perfil.papel !== 'operador' && <Precos />}
+          {tela === 'estoque' && <Estoque />}
           {tela === 'financeiro' && perfil.papel !== 'operador' && <Financeiro />}
           {tela === 'vendas' && perfil.papel !== 'operador' && <Vendas />}
           {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}
