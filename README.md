@@ -39,6 +39,7 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Impressão em bobina 58/80 mm (comprovante não fiscal, crediário com assinatura, sangria, suprimento, fechamento e recebimento), leitura de boleto pela câmera e alertas de vencimento (contas, lotes e certificado)
 - [x] Controle de despesas — despesas fixas lançadas sozinhas todo mês, relatório mês a mês e ano por conta (despesas, compras, retiradas e receitas separadas), conferência de repetidos e esquecidos, reclassificação em grupo, histórico de alterações, sugestão de conta pela descrição, filtros por mês, exportação e leitura de boleto por foto
 - [x] Grupo E — NFC-e em contingência off-line (QR Code versão 3 assinado, DANFE em duas vias, transmissão automática em até 24 h com conferência da tentativa original), cancelamento na SEFAZ (evento 110111) junto com a venda, inutilização de numeração com lista de números sem nota e registro no SPED (C100 situação 05)
+- [x] Grupo F — NF-e modelo 55 (venda a empresas e pessoas, devolução ao fornecedor com nota referenciada, frete e volumes, destinatário preenchido pelo cadastro), DANFE A4, cancelamento com estorno do estoque, carta de correção (evento 110110), inutilização da numeração da NF-e; uma venda tem NFC-e ou NF-e, nunca as duas
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

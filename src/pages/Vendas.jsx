@@ -9,6 +9,7 @@ import { useSessao } from '../lib/sessao.js'
 import { useCaixaAberto } from '../lib/caixa.js'
 import { lerNumero } from '../lib/formato.js'
 import { SeletorCliente } from '../components/Clientes.jsx'
+import { criarRascunhoDaVenda } from './NotasFiscais.jsx'
 
 
 function situacaoNota(notas) {
@@ -21,7 +22,7 @@ function situacaoNota(notas) {
   return { tom: 'alerta', texto: 'NFC-e pendente' }
 }
 
-export default function Vendas() {
+export default function Vendas({ irPara }) {
   const avisar = useAviso()
   const perfil = useSessao()
   const { caixa } = useCaixaAberto()
@@ -56,6 +57,17 @@ export default function Vendas() {
     ])
     const lista = notas.data ?? []
     setDetalhe({ ...v, itens: itens.data ?? [], nfce: lista.find((n) => ['autorizada', 'contingencia', 'cancelada'].includes(n.status)) ?? lista[0] ?? null })
+  }
+
+  const [gerandoNfe, setGerandoNfe] = useState(false)
+  const nfeDaVenda = async () => {
+    setGerandoNfe(true)
+    const { data: existente } = await supabase.from('nfe_documentos').select('id').eq('venda_id', detalhe.id).neq('status', 'cancelada').limit(1).maybeSingle()
+    const r = existente ? { data: existente } : await criarRascunhoDaVenda(detalhe)
+    setGerandoNfe(false)
+    if (r.error) { avisar(mensagemErro(r.error), 'erro'); return }
+    try { localStorage.setItem('nfe:abrir', r.data.id) } catch {}
+    irPara?.('notas')
   }
 
   const emitir = async () => {
@@ -153,6 +165,7 @@ export default function Vendas() {
           {detalhe?.status === 'concluida' && perfil.papel !== 'operador' && detalhe.itens.some((i) => Number(i.quantidade) > Number(i.quantidade_devolvida)) && <Botao variante="secundario" onClick={() => setDevolvendo(detalhe)}>Devolução ou troca</Botao>}
           {detalhe?.status === 'concluida' && perfil.papel !== 'operador' && !['contingencia', 'pendente'].includes(detalhe?.nfce?.status) && (
             <Botao variante="perigo" onClick={() => setCancelando(detalhe)}>{detalhe?.nfce?.status === 'autorizada' ? 'Cancelar NFC-e e venda' : 'Cancelar venda'}</Botao>)}
+          {detalhe?.status === 'concluida' && perfil.papel !== 'operador' && !['autorizada', 'contingencia', 'pendente'].includes(detalhe?.nfce?.status) && <Botao variante="secundario" icone="nota" onClick={nfeDaVenda} carregando={gerandoNfe}>NF-e (modelo 55)</Botao>}
           {detalhe?.status === 'concluida' && !['autorizada', 'contingencia', 'cancelada'].includes(detalhe?.nfce?.status) && <Botao icone="nota" onClick={emitir} carregando={emitindo}>{detalhe?.nfce ? 'Reenviar NFC-e' : 'Emitir NFC-e'}</Botao>}
           {['autorizada', 'contingencia'].includes(detalhe?.nfce?.status) && <Botao icone="impressora" onClick={async () => { const x = await imprimirDanfe(detalhe.id); if (x.erro) avisar(x.erro, 'erro') }}>Imprimir DANFE NFC-e</Botao>}
         </>}

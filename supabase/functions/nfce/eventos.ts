@@ -31,6 +31,28 @@ export function montarCancelamento(d: DadosCancelamento) {
   return { id, infEvento };
 }
 
+// ---------------------------------------------------------------- Carta de correção (evento 110110, só NF-e modelo 55)
+export const CONDICAO_USO_CCE = "A Carta de Correcao e disciplinada pelo paragrafo 1o-A do art. 7o do Convenio S/N, de 15 de dezembro de 1970 e pode ser utilizada para regularizacao de erro ocorrido na emissao de documento fiscal, desde que o erro nao esteja relacionado com: I - as variaveis que determinam o valor do imposto tais como: base de calculo, aliquota, diferenca de preco, quantidade, valor da operacao ou da prestacao; II - a correcao de dados cadastrais que implique mudanca do remetente ou do destinatario; III - a data de emissao ou de saida.";
+
+export interface DadosCartaCorrecao {
+  chave: string; cnpj: string; uf: string; ambiente: 1 | 2; correcao: string; quando: Date; sequencia: number;
+}
+
+export function montarCartaCorrecao(d: DadosCartaCorrecao) {
+  if (!/^\d{44}$/.test(d.chave) || d.chave.slice(20, 22) !== "55") throw new Error("A carta de correção vale só para NF-e (modelo 55).");
+  if (!(d.sequencia >= 1 && d.sequencia <= 20)) throw new Error("Limite de 20 cartas de correção por nota.");
+  const texto = txt(d.correcao, 1000);
+  if (texto.length < 15) throw new Error("Escreva a correção com pelo menos 15 letras.");
+  const id = `ID110110${d.chave}${String(d.sequencia).padStart(2, "0")}`;
+  const det = `<detEvento versao="1.00">` + tag("descEvento", "Carta de Correcao") + tag("xCorrecao", texto) +
+    tag("xCondUso", CONDICAO_USO_CCE) + `</detEvento>`;
+  const infEvento = `<infEvento Id="${id}">` +
+    tag("cOrgao", UF_CODIGO[d.uf]) + tag("tpAmb", String(d.ambiente)) + tag("CNPJ", so(d.cnpj)) + tag("chNFe", d.chave) +
+    tag("dhEvento", dataHoraBrasilia(d.quando)) + tag("tpEvento", "110110") + tag("nSeqEvento", String(d.sequencia)) +
+    tag("verEvento", "1.00") + det + `</infEvento>`;
+  return { id, infEvento };
+}
+
 export const envelopeEvento = (infEvento: string, assinatura: string, lote = Date.now()) => {
   const evento = `<evento xmlns="${NS_NFE}" versao="1.00">${infEvento}${assinatura}</evento>`;
   return { evento, lote: `<envEvento xmlns="${NS_NFE}" versao="1.00">${tag("idLote", String(lote).slice(-15))}${evento}</envEvento>` };
@@ -38,7 +60,7 @@ export const envelopeEvento = (infEvento: string, assinatura: string, lote = Dat
 
 // ---------------------------------------------------------------- Inutilização
 export interface DadosInutilizacao {
-  cnpj: string; uf: string; ambiente: 1 | 2; serie: number; inicio: number; fim: number; justificativa: string; ano: number;
+  cnpj: string; uf: string; ambiente: 1 | 2; serie: number; inicio: number; fim: number; justificativa: string; ano: number; modelo?: 55 | 65;
 }
 
 export function montarInutilizacao(d: DadosInutilizacao) {
@@ -47,10 +69,11 @@ export function montarInutilizacao(d: DadosInutilizacao) {
   if (d.fim - d.inicio > 9999) throw new Error("Inutilize no máximo 10.000 números por vez.");
   const aa = String(d.ano % 100).padStart(2, "0");
   const cnpj = so(d.cnpj).padStart(14, "0");
-  const id = `ID${cUF}${aa}${cnpj}65${String(d.serie).padStart(3, "0")}${String(d.inicio).padStart(9, "0")}${String(d.fim).padStart(9, "0")}`;
+  const mod = String(d.modelo ?? 65);
+  const id = `ID${cUF}${aa}${cnpj}${mod}${String(d.serie).padStart(3, "0")}${String(d.inicio).padStart(9, "0")}${String(d.fim).padStart(9, "0")}`;
   const infInut = `<infInut Id="${id}">` +
     tag("tpAmb", String(d.ambiente)) + tag("xServ", "INUTILIZAR") + tag("cUF", cUF) + tag("ano", aa) + tag("CNPJ", cnpj) +
-    tag("mod", "65") + tag("serie", String(d.serie)) + tag("nNFIni", String(d.inicio)) + tag("nNFFin", String(d.fim)) +
+    tag("mod", mod) + tag("serie", String(d.serie)) + tag("nNFIni", String(d.inicio)) + tag("nNFFin", String(d.fim)) +
     tag("xJust", validarJustificativa(d.justificativa)) + `</infInut>`;
   return { id, infInut };
 }

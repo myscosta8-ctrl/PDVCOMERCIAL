@@ -4,8 +4,8 @@ import { cadeiaICP } from "./icp.ts";
 import type { Certificado } from "./assinatura.ts";
 
 const SVRS = {
-  1: "https://nfce.svrs.rs.gov.br/ws",
-  2: "https://nfce-homologacao.svrs.rs.gov.br/ws",
+  65: { 1: "https://nfce.svrs.rs.gov.br/ws", 2: "https://nfce-homologacao.svrs.rs.gov.br/ws" },
+  55: { 1: "https://nfe.svrs.rs.gov.br/ws", 2: "https://nfe-homologacao.svrs.rs.gov.br/ws" },
 } as const;
 
 const SERVICOS = {
@@ -16,13 +16,16 @@ const SERVICOS = {
   consulta: { caminho: "NfeConsulta/NfeConsulta4.asmx", wsdl: "NFeConsultaProtocolo4" },
 } as const;
 
-// UFs cuja NFC-e é autorizada pela SVRS (ampliar conforme novos clientes)
-const UFS_SVRS = new Set(["PA", "AC", "AL", "AP", "DF", "ES", "PB", "PI", "RJ", "RN", "RO", "RR", "SC", "SE", "TO", "RS", "CE"]);
+// UFs autorizadas pela SVRS (ampliar conforme novos clientes): NFC-e e NF-e
+const UFS_SVRS = {
+  65: new Set(["PA", "AC", "AL", "AP", "DF", "ES", "PB", "PI", "RJ", "RN", "RO", "RR", "SC", "SE", "TO", "RS", "CE"]),
+  55: new Set(["PA", "AC", "AL", "AP", "DF", "ES", "PB", "PI", "RJ", "RN", "RO", "RR", "SC", "SE", "TO"]),
+} as const;
 
 export async function enviar(
-  servico: keyof typeof SERVICOS, ambiente: 1 | 2, uf: string, corpo: string, cert: Certificado,
+  servico: keyof typeof SERVICOS, ambiente: 1 | 2, uf: string, corpo: string, cert: Certificado, modelo: 55 | 65 = 65,
 ): Promise<string> {
-  if (!UFS_SVRS.has(uf)) throw new Error(`Emissão de NFC-e para a UF ${uf} ainda não está disponível.`);
+  if (!UFS_SVRS[modelo].has(uf)) throw new Error(`Emissão de ${modelo === 55 ? "NF-e" : "NFC-e"} para a UF ${uf} ainda não está disponível.`);
   const s = SERVICOS[servico];
   const envelope =
     `<?xml version="1.0" encoding="utf-8"?>` +
@@ -33,7 +36,7 @@ export async function enviar(
   try {
     const controle = new AbortController();
     const limite = setTimeout(() => controle.abort(), 30000);
-    const resp = await fetch(`${SVRS[ambiente]}/${s.caminho}`, {
+    const resp = await fetch(`${SVRS[modelo][ambiente]}/${s.caminho}`, {
       method: "POST",
       headers: { "Content-Type": "application/soap+xml; charset=utf-8" },
       body: envelope,

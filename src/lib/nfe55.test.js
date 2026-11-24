@@ -1,0 +1,83 @@
+import { describe, expect, it } from 'vitest'
+import { montarInfNFe55, cfopPorDestino } from '../../supabase/functions/nfce/nfe55.ts'
+import { montarCartaCorrecao, montarInutilizacao, CONDICAO_USO_CCE } from '../../supabase/functions/nfce/eventos.ts'
+import { digitoChave } from '../../supabase/functions/nfce/xml.ts'
+
+const valor = (xml, t) => xml.match(new RegExp(`<${t}>([^<]*)</${t}>`))?.[1]
+const dest = (extra = {}) => ({
+  documento: '11.222.333/0001-81', nome: 'Clínica Bem-Estar Ltda', ie: '151112223', indIEDest: 1, email: 'compras@clinica.com.br',
+  endereco: { logradouro: 'Av. Rio Branco', numero: '50', bairro: 'Centro', municipio: 'Breves', municipio_ibge: '1501808', uf: 'PA', cep: '68800-000' }, ...extra,
+})
+const nota = (extra = {}) => ({
+  emitente: { cnpj: '12345678000195', ie: '151234567', razao_social: 'Farma Família Ltda', crt: 1, uf: 'PA', municipio_ibge: '1501808',
+    endereco: { logradouro: 'Rua A', numero: '1', bairro: 'Centro', municipio: 'Breves', cep: '68800000' } },
+  ambiente: 1, serie: 1, numero: 15, codigo_numerico: '87654321', emissao: new Date('2026-11-24T15:00:00Z'),
+  natureza: 'Venda de mercadoria', finalidade: 1, presenca: 1, consumidorFinal: false, destinatario: dest(),
+  itens: [{ codigo: '101', ean: '7896004700120', descricao: 'Dipirona 500 mg', ncm: '30049099', cfop: '5102', unidade: 'CX', quantidade: 10, valor_unitario: 6.9, desconto: 0, origem: 0, csosn: '102', frete: 5 }],
+  frete: { modalidade: 0, volumes: { quantidade: 1, especie: 'Caixa', pesoBruto: 2.5 } },
+  pagamentos: [{ forma: 'boleto', valor: 74 }], ...extra,
+})
+
+describe('NF-e modelo 55', () => {
+  it('monta a venda dentro do estado para contribuinte', () => {
+    const { chave, infNFe, vNF } = montarInfNFe55(nota())
+    expect(chave.slice(20, 22)).toBe('55')
+    expect(chave).toHaveLength(44)
+    expect(Number(chave[43])).toBe(digitoChave(chave.slice(0, 43)))
+    expect(infNFe).toContain('<mod>55</mod>')
+    expect(infNFe).toContain('<idDest>1</idDest>')
+    expect(infNFe).toContain('<tpImp>1</tpImp>')
+    expect(infNFe).toContain('<indFinal>0</indFinal><indPres>1</indPres><procEmi>0</procEmi>')
+    expect(infNFe).toContain('<CNPJ>11222333000181</CNPJ><xNome>Clínica Bem-Estar Ltda</xNome><enderDest>')
+    expect(infNFe).toContain('<indIEDest>1</indIEDest><IE>151112223</IE><email>compras@clinica.com.br</email></dest>')
+    expect(infNFe).toContain('<vFrete>5.00</vFrete>')
+    expect(infNFe).toContain('<transp><modFrete>0</modFrete><vol><qVol>1</qVol><esp>Caixa</esp><pesoB>2.500</pesoB></vol></transp>')
+    expect(infNFe).toContain('<tPag>15</tPag><vPag>74.00</vPag>')
+    expect(vNF).toBe(74)
+    expect(valor(infNFe.slice(infNFe.indexOf('<ICMSTot>')), 'vNF')).toBe('74.00')
+    expect(infNFe).not.toContain('infNFeSupl')
+  })
+  it('para outro estado vira 6xxx e recusa consumidor final não contribuinte (DIFAL)', () => {
+    const fora = dest({ endereco: { ...dest().endereco, uf: 'AM', municipio: 'Manaus', municipio_ibge: '1302603' } })
+    const { infNFe } = montarInfNFe55(nota({ destinatario: fora }))
+    expect(infNFe).toContain('<idDest>2</idDest>')
+    expect(infNFe).toContain('<CFOP>6102</CFOP>')
+    expect(() => montarInfNFe55(nota({ destinatario: { ...fora, indIEDest: 9, ie: null }, consumidorFinal: true }))).toThrow(/DIFAL/)
+  })
+  it('devolução referencia a nota de compra e vai sem pagamento', () => {
+    const ref = '15261199888777000166550010000077771000077771'
+    const { infNFe } = montarInfNFe55(nota({ finalidade: 4, presenca: 0, natureza: 'Devolução de compra', pagamentos: [], referencias: [ref],
+      itens: [{ ...nota().itens[0], cfop: '5202', csosn: '900', aliquota_icms: 12, frete: 0 }] }))
+    expect(infNFe).toContain(`<verProc>PDV Comercial 1.0</verProc><NFref><refNFe>${ref}</refNFe></NFref></ide>`)
+    expect(infNFe).toContain('<finNFe>4</finNFe>')
+    expect(infNFe).toContain('<tPag>90</tPag><vPag>0.00</vPag>')
+    expect(infNFe).toContain('<ICMSSN900><orig>0</orig><CSOSN>900</CSOSN><modBC>3</modBC><vBC>69.00</vBC><pICMS>12.0000</pICMS><vICMS>8.28</vICMS></ICMSSN900>')
+    expect(() => montarInfNFe55(nota({ finalidade: 4, referencias: [] }))).toThrow(/chave da nota/)
+  })
+  it('homologação troca o nome do destinatário e exige dados', () => {
+    expect(montarInfNFe55(nota({ ambiente: 2 })).infNFe).toContain('<xNome>NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL</xNome>')
+    expect(() => montarInfNFe55(nota({ destinatario: dest({ endereco: { ...dest().endereco, municipio_ibge: '' } }) }))).toThrow(/IBGE/)
+    expect(() => montarInfNFe55(nota({ pagamentos: [{ forma: 'pix', valor: 10 }] }))).toThrow(/não cobrem/)
+  })
+  it('CFOP por destino', () => {
+    expect(cfopPorDestino('5102', true)).toBe('6102')
+    expect(cfopPorDestino('6202', false)).toBe('5202')
+  })
+})
+
+describe('carta de correção e inutilização da NF-e', () => {
+  const chave55 = (() => { const b = '1526111234567800019555001000000015187654321'; return b + digitoChave(b) })()
+  it('monta o evento 110110 com a condição de uso', () => {
+    const { id, infEvento } = montarCartaCorrecao({ chave: chave55, cnpj: '12345678000195', uf: 'PA', ambiente: 2, correcao: 'Complemento do endereço: sala 2', quando: new Date('2026-11-24T15:00:00Z'), sequencia: 2 })
+    expect(id).toBe(`ID110110${chave55}02`)
+    expect(infEvento).toContain('<tpEvento>110110</tpEvento><nSeqEvento>2</nSeqEvento>')
+    expect(infEvento).toContain(`<descEvento>Carta de Correcao</descEvento><xCorrecao>Complemento do endereço: sala 2</xCorrecao><xCondUso>${CONDICAO_USO_CCE}</xCondUso>`)
+    expect(() => montarCartaCorrecao({ chave: chave55, cnpj: '1', uf: 'PA', ambiente: 2, correcao: 'curta', quando: new Date(), sequencia: 1 })).toThrow()
+    expect(() => montarCartaCorrecao({ chave: chave55.replace('55001', '65001'), cnpj: '1', uf: 'PA', ambiente: 2, correcao: 'Correção longa o bastante', quando: new Date(), sequencia: 1 })).toThrow(/modelo 55/)
+  })
+  it('inutilização no modelo 55', () => {
+    const { id, infInut } = montarInutilizacao({ cnpj: '12345678000195', uf: 'PA', ambiente: 2, serie: 1, inicio: 3, fim: 3, justificativa: 'Numeração pulada por falha do sistema', ano: 2026, modelo: 55 })
+    expect(id).toBe('ID15261234567800019555001000000003000000003')
+    expect(infInut).toContain('<mod>55</mod>')
+  })
+})

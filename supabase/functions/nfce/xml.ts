@@ -10,6 +10,7 @@ export const UF_CODIGO: Record<string, string> = {
   PR: "41", SC: "42", RS: "43", MS: "50", MT: "51", GO: "52", DF: "53",
 };
 
+export const TEXTO_HOMOLOGACAO_NFE = "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
 export const TEXTO_HOMOLOGACAO = "NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
 
 export interface Emitente {
@@ -23,6 +24,7 @@ export interface ItemNota {
   origem: number; csosn?: string | null; cst_icms?: string | null;
   aliquota_icms?: number | null; reducao_bc?: number | null; cbenef?: string | null;
   cst_pis?: string | null; aliquota_pis?: number | null; cst_cofins?: string | null; aliquota_cofins?: number | null;
+  frete?: number; xPed?: string | null;
 }
 export interface PagamentoNota { forma: string; valor: number }
 export interface DadosNota {
@@ -42,12 +44,12 @@ export function txt(v: unknown, max = 120): string {
     .slice(0, max);
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-const so = (v: unknown) => String(v ?? "").replace(/\D/g, "");
-const n2 = (v: number) => v.toFixed(2);
-const n4 = (v: number) => v.toFixed(4);
+export const so = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+export const n2 = (v: number) => v.toFixed(2);
+export const n4 = (v: number) => v.toFixed(4);
 const n10 = (v: number) => v.toFixed(10);
-const tag = (nome: string, valor: string) => `<${nome}>${valor}</${nome}>`;
-const arred = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+export const tag = (nome: string, valor: string) => `<${nome}>${valor}</${nome}>`;
+export const arred = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
 export function digitoChave(chave43: string): number {
   let peso = 2, soma = 0;
@@ -78,7 +80,7 @@ export function montarChave(d: DadosNota, tpEmis = 1) {
 }
 
 // Código do meio de pagamento (tabela tPag)
-const T_PAG: Record<string, string> = { dinheiro: "01", credito: "03", debito: "04", crediario: "05", pix: "17", outro: "99" };
+export const T_PAG: Record<string, string> = { dinheiro: "01", credito: "03", debito: "04", crediario: "05", pix: "17", outro: "99" };
 
 export function montarInfNFe(d: DadosNota) {
   const tpEmis = d.contingencia ? 9 : 1;
@@ -116,58 +118,9 @@ export function montarInfNFe(d: DadosNota) {
       tag("indIEDest", "9"));
   }
 
-  let vProd = 0, vDesc = 0, vBCTot = 0, vICMSTot = 0, vPISTot = 0, vCOFINSTot = 0;
-  const dets = d.itens.map((it, i) => {
-    const bruto = arred(it.quantidade * it.valor_unitario);
-    vProd += bruto; vDesc += it.desconto;
-    const gtin = /^\d{8}$|^\d{12,14}$/.test(it.ean ?? "") ? it.ean! : "SEM GTIN";
-    const descricao = homolog && i === 0 ? TEXTO_HOMOLOGACAO : txt(it.descricao, 120);
-    const ncm = so(it.ncm);
-    if (ncm.length !== 8) throw new Error(`NCM inválido no produto "${it.descricao}"`);
-    const prod =
-      tag("cProd", txt(it.codigo, 60)) + tag("cEAN", gtin) + tag("xProd", descricao) + tag("NCM", ncm) +
-      (it.cest ? tag("CEST", so(it.cest)) : "") + (it.cbenef ? tag("cBenef", txt(it.cbenef, 10)) : "") + tag("CFOP", so(it.cfop)) + tag("uCom", txt(it.unidade, 6)) +
-      tag("qCom", n4(it.quantidade)) + tag("vUnCom", n10(it.valor_unitario)) + tag("vProd", n2(bruto)) +
-      tag("cEANTrib", gtin) + tag("uTrib", txt(it.unidade, 6)) + tag("qTrib", n4(it.quantidade)) +
-      tag("vUnTrib", n10(it.valor_unitario)) + (it.desconto > 0 ? tag("vDesc", n2(it.desconto)) : "") +
-      tag("indTot", "1");
-
-    let icms: string;
-    if (e.crt === 1 || e.crt === 4) {
-      const csosn = it.csosn || "102";
-      if (!["102", "103", "300", "400", "500"].includes(csosn)) throw new Error(`CSOSN ${csosn} ainda não suportado na NFC-e`);
-      const grupo = csosn === "500" ? "ICMSSN500" : "ICMSSN102";
-      icms = tag(grupo, tag("orig", String(it.origem)) + tag("CSOSN", csosn));
-    } else {
-      const cst = it.cst_icms || "41";
-      if (cst === "00" || cst === "20") {
-        const red = cst === "20" ? Number(it.reducao_bc || 0) : 0;
-        const aliq = Number(it.aliquota_icms || 0);
-        const vBC = arred((bruto - it.desconto) * (1 - red / 100));
-        const vICMS = arred(vBC * aliq / 100);
-        vBCTot += vBC; vICMSTot += vICMS;
-        icms = tag(`ICMS${cst}`, tag("orig", String(it.origem)) + tag("CST", cst) + tag("modBC", "3") +
-          (cst === "20" ? tag("pRedBC", n4(red)) : "") + tag("vBC", n2(vBC)) + tag("pICMS", n4(aliq)) + tag("vICMS", n2(vICMS)));
-      } else if (["40", "41", "50", "60"].includes(cst)) {
-        icms = tag(cst === "60" ? "ICMS60" : "ICMS40", tag("orig", String(it.origem)) + tag("CST", cst));
-      } else throw new Error(`CST ${cst} ainda não suportado na NFC-e`);
-    }
-    const contrib = (nome: "PIS" | "COFINS", cstInf?: string | null, aliqInf?: number | null) => {
-      const cst = cstInf || "99";
-      const aliq = Number(aliqInf || 0);
-      const base = arred(bruto - it.desconto);
-      if (["04", "05", "06", "07", "08", "09"].includes(cst)) return tag(nome, tag(`${nome}NT`, tag("CST", cst)));
-      const valor = arred(base * aliq / 100);
-      if (nome === "PIS") vPISTot += valor; else vCOFINSTot += valor;
-      const grupo = cst === "01" || cst === "02" ? `${nome}Aliq` : `${nome}Outr`;
-      if (cst === "03") throw new Error(`CST ${cst} de ${nome} (por quantidade) ainda não suportado na NFC-e`);
-      return tag(nome, tag(grupo, tag("CST", cst) + tag("vBC", n2(aliq > 0 || grupo.endsWith("Aliq") ? base : 0)) +
-        tag(`p${nome}`, n4(aliq)) + tag(`v${nome}`, n2(valor))));
-    };
-    const pis = contrib("PIS", it.cst_pis, it.aliquota_pis);
-    const cofins = contrib("COFINS", it.cst_cofins, it.aliquota_cofins);
-    return `<det nItem="${i + 1}">` + tag("prod", prod) + tag("imposto", tag("ICMS", icms) + pis + cofins) + `</det>`;
-  }).join("");
+  const it = montarItens(d.itens, e.crt, homolog ? TEXTO_HOMOLOGACAO : null);
+  let { vProd, vDesc } = it;
+  const { dets, vBCTot, vICMSTot, vPISTot, vCOFINSTot } = it;
 
   vProd = arred(vProd); vDesc = arred(vDesc);
   const vNF = arred(vProd - vDesc);
@@ -193,6 +146,77 @@ export function montarInfNFe(d: DadosNota) {
   // Atributos em ordem canônica: Id antes de versao
   const infNFe = `<infNFe Id="NFe${chave}" versao="4.00">${corpo}</infNFe>`;
   return { chave, infNFe, vNF, vProd, vDesc, documento: dest ? doc : null };
+}
+
+// Itens (det) com ICMS, PIS e COFINS; usado pela NFC-e (65) e pela NF-e (55).
+// textoPrimeiro: na NFC-e de homologação, a descrição do 1º item é substituída pelo texto obrigatório.
+export function montarItens(itens: ItemNota[], crt: number, textoPrimeiro: string | null = null) {
+  const e = { crt };
+  let vProd = 0, vDesc = 0, vBCTot = 0, vICMSTot = 0, vPISTot = 0, vCOFINSTot = 0, vFreteTot = 0;
+  const dets = itens.map((it, i) => {
+    const bruto = arred(it.quantidade * it.valor_unitario);
+    const frete = arred(Number(it.frete || 0));
+    vProd += bruto; vDesc += it.desconto; vFreteTot += frete;
+    const gtin = /^\d{8}$|^\d{12,14}$/.test(it.ean ?? "") ? it.ean! : "SEM GTIN";
+    const descricao = textoPrimeiro && i === 0 ? textoPrimeiro : txt(it.descricao, 120);
+    const ncm = so(it.ncm);
+    if (ncm.length !== 8) throw new Error(`NCM inválido no produto "${it.descricao}"`);
+    const prod =
+      tag("cProd", txt(it.codigo, 60)) + tag("cEAN", gtin) + tag("xProd", descricao) + tag("NCM", ncm) +
+      (it.cest ? tag("CEST", so(it.cest)) : "") + (it.cbenef ? tag("cBenef", txt(it.cbenef, 10)) : "") + tag("CFOP", so(it.cfop)) + tag("uCom", txt(it.unidade, 6)) +
+      tag("qCom", n4(it.quantidade)) + tag("vUnCom", n10(it.valor_unitario)) + tag("vProd", n2(bruto)) +
+      tag("cEANTrib", gtin) + tag("uTrib", txt(it.unidade, 6)) + tag("qTrib", n4(it.quantidade)) +
+      tag("vUnTrib", n10(it.valor_unitario)) + (frete > 0 ? tag("vFrete", n2(frete)) : "") + (it.desconto > 0 ? tag("vDesc", n2(it.desconto)) : "") +
+      tag("indTot", "1") + (it.xPed ? tag("xPed", txt(it.xPed, 15)) : "");
+
+    let icms: string;
+    if (e.crt === 1 || e.crt === 4) {
+      const csosn = it.csosn || "102";
+      if (csosn === "900") {
+        // Outros (ex.: devolução de compra): destaca o ICMS se houver alíquota
+        const aliq = Number(it.aliquota_icms || 0);
+        const vBC = aliq > 0 ? arred(bruto - it.desconto + frete) : 0;
+        const vICMS = arred(vBC * aliq / 100);
+        vBCTot += vBC; vICMSTot += vICMS;
+        icms = tag("ICMSSN900", tag("orig", String(it.origem)) + tag("CSOSN", csosn) +
+          (aliq > 0 ? tag("modBC", "3") + tag("vBC", n2(vBC)) + tag("pICMS", n4(aliq)) + tag("vICMS", n2(vICMS)) : ""));
+      } else {
+        if (!["102", "103", "300", "400", "500"].includes(csosn)) throw new Error(`CSOSN ${csosn} ainda não suportado`);
+        const grupo = csosn === "500" ? "ICMSSN500" : "ICMSSN102";
+        icms = tag(grupo, tag("orig", String(it.origem)) + tag("CSOSN", csosn));
+      }
+    } else {
+      const cst = it.cst_icms || "41";
+      if (cst === "00" || cst === "20") {
+        const red = cst === "20" ? Number(it.reducao_bc || 0) : 0;
+        const aliq = Number(it.aliquota_icms || 0);
+        const vBC = arred((bruto - it.desconto + frete) * (1 - red / 100));
+        const vICMS = arred(vBC * aliq / 100);
+        vBCTot += vBC; vICMSTot += vICMS;
+        icms = tag(`ICMS${cst}`, tag("orig", String(it.origem)) + tag("CST", cst) + tag("modBC", "3") +
+          (cst === "20" ? tag("pRedBC", n4(red)) : "") + tag("vBC", n2(vBC)) + tag("pICMS", n4(aliq)) + tag("vICMS", n2(vICMS)));
+      } else if (["40", "41", "50", "60"].includes(cst)) {
+        icms = tag(cst === "60" ? "ICMS60" : "ICMS40", tag("orig", String(it.origem)) + tag("CST", cst));
+      } else throw new Error(`CST ${cst} ainda não suportado`);
+    }
+    const contrib = (nome: "PIS" | "COFINS", cstInf?: string | null, aliqInf?: number | null) => {
+      const cst = cstInf || "99";
+      const aliq = Number(aliqInf || 0);
+      const base = arred(bruto - it.desconto + frete);
+      if (["04", "05", "06", "07", "08", "09"].includes(cst)) return tag(nome, tag(`${nome}NT`, tag("CST", cst)));
+      const valor = arred(base * aliq / 100);
+      if (nome === "PIS") vPISTot += valor; else vCOFINSTot += valor;
+      const grupo = cst === "01" || cst === "02" ? `${nome}Aliq` : `${nome}Outr`;
+      if (cst === "03") throw new Error(`CST ${cst} de ${nome} (por quantidade) ainda não suportado`);
+      return tag(nome, tag(grupo, tag("CST", cst) + tag("vBC", n2(aliq > 0 || grupo.endsWith("Aliq") ? base : 0)) +
+        tag(`p${nome}`, n4(aliq)) + tag(`v${nome}`, n2(valor))));
+    };
+    const pis = contrib("PIS", it.cst_pis, it.aliquota_pis);
+    const cofins = contrib("COFINS", it.cst_cofins, it.aliquota_cofins);
+    return `<det nItem="${i + 1}">` + tag("prod", prod) + tag("imposto", tag("ICMS", icms) + pis + cofins) + `</det>` +
+      "";
+  }).join("");
+  return { dets, vProd: arred(vProd), vDesc: arred(vDesc), vFrete: arred(vFreteTot), vBCTot, vICMSTot, vPISTot, vCOFINSTot };
 }
 
 // Distribui o desconto da venda entre os itens (proporcional; sobra no maior item)

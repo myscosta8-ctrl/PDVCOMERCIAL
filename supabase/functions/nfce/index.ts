@@ -4,13 +4,15 @@
 //   { acao: "emitir", venda_id }
 //   { acao: "transmitir" }                         — envia as notas em contingência e confere as pendentes
 //   { acao: "cancelar", venda_id, justificativa }   — cancela a NFC-e na SEFAZ e depois a venda
-//   { acao: "inutilizar", serie, inicio, fim, justificativa }
+//   { acao: "inutilizar", serie, inicio, fim, justificativa, modelo? }
+//   NF-e modelo 55: { acao: "nfe_emitir" | "nfe_consultar", nfe_id } | { acao: "nfe_cancelar", nfe_id, justificativa } | { acao: "nfe_cce", nfe_id, correcao }
 import { createClient } from "@supabase/supabase-js";
-import { montarInfNFe, montarQrCode, montarInfNFeSupl, ratearDesconto, NS_NFE, UF_CODIGO } from "./xml.ts";
+import { montarInfNFe, montarQrCode, montarInfNFeSupl, ratearDesconto, NS_NFE, UF_CODIGO, type ItemNota } from "./xml.ts";
+import { montarInfNFe55, type Destinatario } from "./nfe55.ts";
 import { lerPfx, assinar, assinarTexto, type Certificado } from "./assinatura.ts";
 import { enviar, statusServico, valor, bloco } from "./sefaz.ts";
 import {
-  montarCancelamento, envelopeEvento, montarInutilizacao, envelopeInutilizacao, consultaProtocolo,
+  montarCancelamento, montarCartaCorrecao, envelopeEvento, montarInutilizacao, envelopeInutilizacao, consultaProtocolo,
   parametrosQrV3Offline, montarQrCodeV3Offline, validarJustificativa,
   EVENTO_OK, CONSULTA_AUTORIZADA, CONSULTA_INEXISTENTE, SEFAZ_INDISPONIVEL,
 } from "./eventos.ts";
@@ -41,7 +43,7 @@ async function usuarioDaRequisicao(req: Request): Promise<Usuario> {
   return { ...(u as { id: string; empresa_id: string; papel: string }), token };
 }
 
-async function carregarEmpresa(empresaId: string) {
+async function carregarEmpresa(empresaId: string, modelo: 55 | 65 = 65) {
   const { data: e } = await servico.from("empresas").select("*").eq("id", empresaId).single();
   const faltando: string[] = [];
   const end = e.endereco ?? {};
@@ -52,17 +54,18 @@ async function carregarEmpresa(empresaId: string) {
   for (const [c, n] of [["logradouro", "logradouro"], ["bairro", "bairro"], ["municipio", "município"], ["cep", "CEP"]]) {
     if (!end[c]) faltando.push(n);
   }
-  if (!e.nfce_csc_id) faltando.push("ID do CSC");
-  if (!e.nfce_url_qrcode || !e.nfce_url_consulta) faltando.push("endereços de consulta da NFC-e");
+  // CSC e endereços do QR Code só valem para a NFC-e
+  if (modelo === 65 && !e.nfce_csc_id) faltando.push("ID do CSC");
+  if (modelo === 65 && (!e.nfce_url_qrcode || !e.nfce_url_consulta)) faltando.push("endereços de consulta da NFC-e");
   if (faltando.length) throw new ErroUsuario(`Complete a configuração fiscal: ${faltando.join(", ")}.`);
   return e;
 }
 
-async function carregarCertificado(empresa: { id: string; cnpj: string }): Promise<{ cert: Certificado; csc: string }> {
+async function carregarCertificado(empresa: { id: string; cnpj: string }, exigirCsc = true): Promise<{ cert: Certificado; csc: string }> {
   const { data, error } = await servico.rpc("ler_credenciais_fiscais", { p_empresa: empresa.id });
   if (error) throw error;
   if (!data?.pfx || !data?.senha) throw new ErroUsuario("Envie o certificado digital A1 e a senha na configuração fiscal.");
-  if (!data?.csc) throw new ErroUsuario("Informe o CSC (código de segurança do contribuinte) na configuração fiscal.");
+  if (exigirCsc && !data?.csc) throw new ErroUsuario("Informe o CSC (código de segurança do contribuinte) na configuração fiscal.");
   const cert = lerPfx(data.pfx, data.senha);
   if (cert.validoAte < new Date()) throw new ErroUsuario("O certificado digital está vencido.");
   const cnpj = String(empresa.cnpj).replace(/\D/g, "");
@@ -73,9 +76,9 @@ async function carregarCertificado(empresa: { id: string; cnpj: string }): Promi
 }
 
 // Envia à SEFAZ; falha de rede vira SemComunicacao (gatilho da contingência)
-async function falar(servicoSefaz: Parameters<typeof enviar>[0], empresa: { nfce_ambiente: number; uf: string }, corpo: string, cert: Certificado) {
+async function falar(servicoSefaz: Parameters<typeof enviar>[0], empresa: { nfce_ambiente: number; uf: string }, corpo: string, cert: Certificado, modelo: 55 | 65 = 65) {
   try {
-    return await enviar(servicoSefaz, Number(empresa.nfce_ambiente) as 1 | 2, empresa.uf, corpo, cert);
+    return await enviar(servicoSefaz, Number(empresa.nfce_ambiente) as 1 | 2, empresa.uf, corpo, cert, modelo);
   } catch (e) {
     if (String(e).includes("ainda não está disponível")) throw new ErroUsuario(String((e as Error).message));
     throw new SemComunicacao(String(e).slice(0, 250));
@@ -87,8 +90,8 @@ const urlQrDaEmpresa = (empresa: Record<string, unknown>, ambiente: number) => a
   : String(empresa.nfce_url_qrcode);
 
 async function testar(empresaId: string) {
-  const empresa = await carregarEmpresa(empresaId);
-  const { cert } = await carregarCertificado(empresa);
+  const empresa = await carregarEmpresa(empresaId, 55);
+  const { cert } = await carregarCertificado(empresa, false);
   await servico.from("empresas").update({ certificado_titular: cert.titular, certificado_validade: cert.validoAte.toISOString() }).eq("id", empresa.id);
   const ret = await statusServico(empresa.nfce_ambiente, empresa.uf, UF_CODIGO[empresa.uf], cert);
   return {
@@ -369,10 +372,7 @@ async function cancelar(usuario: Usuario, vendaId: string, justificativa: string
   }).eq("id", doc.id);
 
   // A venda é cancelada com a sessão do próprio usuário (estoque volta, auditoria registra quem foi)
-  const comoUsuario = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${usuario.token}` } },
-  });
-  const { error } = await comoUsuario.rpc("cancelar_venda", { p_venda: vendaId, p_motivo: just });
+  const { error } = await comoUsuario(usuario).rpc("cancelar_venda", { p_venda: vendaId, p_motivo: just });
   if (error) {
     return { cancelada_sefaz: true, venda_cancelada: false, aviso: `A NFC-e foi cancelada, mas a venda não: ${error.message}. Cancele a venda pela tela Vendas.`, codigo: cStat };
   }
@@ -380,23 +380,25 @@ async function cancelar(usuario: Usuario, vendaId: string, justificativa: string
 }
 
 // ------------------------------------------------------------------ Inutilização
-async function inutilizar(usuario: Usuario, corpo: { serie?: number; inicio?: number; fim?: number; justificativa?: string }) {
+async function inutilizar(usuario: Usuario, corpo: { serie?: number; inicio?: number; fim?: number; justificativa?: string; modelo?: number }) {
   if (!GESTORES.includes(usuario.papel)) throw new ErroUsuario("Inutilização exige gerente ou administrador.");
-  const empresa = await carregarEmpresa(usuario.empresa_id);
+  const modelo = Number(corpo.modelo) === 55 ? 55 : 65;
+  const tabela = modelo === 55 ? "nfe_documentos" : "nfce_documentos";
+  const empresa = await carregarEmpresa(usuario.empresa_id, modelo);
   const ambiente = Number(empresa.nfce_ambiente) as 1 | 2;
-  const serie = Number(corpo.serie ?? empresa.nfce_serie);
+  const serie = Number(corpo.serie ?? (modelo === 55 ? empresa.nfe_serie : empresa.nfce_serie));
   const inicio = Number(corpo.inicio), fim = Number(corpo.fim);
   const just = validarJustificativa(corpo.justificativa ?? "");
-  const { data: usados } = await servico.from("nfce_documentos").select("numero, status").eq("empresa_id", usuario.empresa_id)
+  const { data: usados } = await servico.from(tabela).select("numero, status").eq("empresa_id", usuario.empresa_id)
     .eq("ambiente", ambiente).eq("serie", serie).gte("numero", inicio).lte("numero", fim)
     .in("status", ["autorizada", "cancelada", "contingencia", "pendente"]);
   if (usados?.length) throw new ErroUsuario(`O nº ${usados[0].numero} está ${usados[0].status === "pendente" ? "pendente de resposta" : usados[0].status} e não pode ser inutilizado.`);
-  const { cert } = await carregarCertificado(empresa);
-  const { id, infInut } = montarInutilizacao({ cnpj: empresa.cnpj, uf: empresa.uf, ambiente, serie, inicio, fim, justificativa: just, ano: new Date().getFullYear() });
+  const { cert } = await carregarCertificado(empresa, modelo === 65);
+  const { id, infInut } = montarInutilizacao({ cnpj: empresa.cnpj, uf: empresa.uf, ambiente, serie, inicio, fim, justificativa: just, ano: new Date().getFullYear(), modelo });
   const xml = envelopeInutilizacao(infInut, assinar(infInut, "infInut", id, cert));
   let retorno: string;
   try {
-    retorno = await falar("inutilizacao", empresa, xml, cert);
+    retorno = await falar("inutilizacao", empresa, xml, cert, modelo);
   } catch (e) {
     if (e instanceof SemComunicacao) throw new ErroUsuario("Sem comunicação com a SEFAZ. Tente de novo em alguns minutos.");
     throw e;
@@ -405,12 +407,193 @@ async function inutilizar(usuario: Usuario, corpo: { serie?: number; inicio?: nu
   const cStat = valor(ret, "cStat"), motivo = valor(ret, "xMotivo");
   if (cStat !== "102") throw new ErroUsuario(`Inutilização recusada pela SEFAZ (${cStat}): ${motivo}`);
   await servico.from("nfce_inutilizacoes").insert({
-    empresa_id: usuario.empresa_id, ambiente, serie, inicio, fim, justificativa: just, protocolo: valor(ret, "nProt"),
+    empresa_id: usuario.empresa_id, modelo, ambiente, serie, inicio, fim, justificativa: just, protocolo: valor(ret, "nProt"),
     codigo_status: cStat, motivo, xml: `<ProcInutNFe xmlns="${NS_NFE}" versao="4.00">${xml}${ret}</ProcInutNFe>`, usuario_id: usuario.id,
   });
-  await servico.from("nfce_documentos").update({ status: "inutilizada", motivo: `Número inutilizado (protocolo ${valor(ret, "nProt")}).` })
+  await servico.from(tabela).update({ status: "inutilizada", motivo: `Número inutilizado (protocolo ${valor(ret, "nProt")}).` })
     .eq("empresa_id", usuario.empresa_id).eq("ambiente", ambiente).eq("serie", serie).gte("numero", inicio).lte("numero", fim).eq("status", "rejeitada");
   return { protocolo: valor(ret, "nProt"), codigo: cStat, motivo };
+}
+
+
+// ------------------------------------------------------------------ NF-e modelo 55
+const comoUsuario = (usuario: Usuario) => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+  auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${usuario.token}` } },
+});
+
+async function carregarNfe(usuario: Usuario, id: string) {
+  if (!GESTORES.includes(usuario.papel)) throw new ErroUsuario("NF-e exige gerente ou administrador.");
+  const { data: d } = await servico.from("nfe_documentos").select("*").eq("id", id).eq("empresa_id", usuario.empresa_id).maybeSingle();
+  if (!d) throw new ErroUsuario("NF-e não encontrada.");
+  return d;
+}
+
+// Rateia o frete entre os itens pelo valor de cada um (a sobra fica no maior)
+function ratearFrete(itens: { bruto: number }[], frete: number): number[] {
+  const soma = itens.reduce((s, i) => s + i.bruto, 0);
+  if (!(frete > 0) || soma <= 0) return itens.map(() => 0);
+  const partes = itens.map((i) => Math.floor((frete * i.bruto / soma) * 100) / 100);
+  const maior = itens.map((i) => i.bruto).indexOf(Math.max(...itens.map((i) => i.bruto)));
+  partes[maior] = Math.round((partes[maior] + frete - partes.reduce((s, v) => s + v, 0)) * 100) / 100;
+  return partes;
+}
+
+async function finalizarNfe(usuario: Usuario, docId: string, nfe: string, prot: string, cStat: string, motivo: string | null) {
+  const nfeProc = `<nfeProc xmlns="${NS_NFE}" versao="4.00">${nfe}${prot}</nfeProc>`;
+  const { data: doc } = await servico.from("nfe_documentos").update({
+    status: "autorizada", codigo_status: cStat, motivo, protocolo: valor(prot, "nProt"), xml_autorizado: nfeProc, emitida_em: new Date().toISOString(),
+  }).eq("id", docId).select("*").single();
+  let aviso: string | null = null;
+  if (doc?.mover_estoque) {
+    const { error } = await comoUsuario(usuario).rpc("movimentar_estoque_nfe", { p_nfe: docId });
+    if (error) aviso = `NF-e autorizada, mas o estoque não foi baixado: ${error.message}`;
+  }
+  return { ...doc, aviso };
+}
+
+async function emitirNfe(usuario: Usuario, id: string) {
+  const d = await carregarNfe(usuario, id);
+  if (d.status === "autorizada") return d;
+  if (!["rascunho", "rejeitada", "pendente"].includes(d.status)) throw new ErroUsuario("Esta NF-e não pode ser emitida.");
+  if (d.status === "pendente") return await consultarNfe(usuario, id);
+  const itensDoc = (d.itens ?? []) as Record<string, any>[];
+  if (!itensDoc.length) throw new ErroUsuario("Inclua pelo menos um produto.");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  const ambiente = Number(empresa.nfce_ambiente) as 1 | 2;
+  const serie = Number(empresa.nfe_serie ?? 1);
+  let numero = d.numero && d.ambiente === ambiente && d.serie === serie ? Number(d.numero) : 0;
+  if (!numero) {
+    const { data: n, error } = await servico.rpc("proximo_numero", { p_empresa: empresa.id, p_tipo: `nfe_${ambiente}`, p_serie: serie });
+    if (error) throw error;
+    numero = Number(n);
+  }
+  const codigo = String(crypto.getRandomValues(new Uint32Array(1))[0] % 100000000).padStart(8, "0");
+  const brutos = itensDoc.map((i) => ({ bruto: Math.round(Number(i.quantidade) * Number(i.valor_unitario) * 100) / 100 }));
+  const fretes = ratearFrete(brutos, Number(d.frete?.valor ?? 0));
+  const itens: ItemNota[] = itensDoc.map((i, k) => ({
+    codigo: String(i.codigo || String(i.produto_id ?? k + 1).slice(0, 8)), ean: i.ean ?? null, descricao: i.descricao, ncm: String(i.ncm ?? ""),
+    cest: i.cest ?? null, cfop: String(i.cfop || "5102"), unidade: String(i.unidade || "UN"), quantidade: Number(i.quantidade),
+    valor_unitario: Number(i.valor_unitario), desconto: Number(i.desconto || 0), origem: Number(i.origem ?? 0),
+    csosn: i.csosn ?? null, cst_icms: i.cst_icms ?? null, aliquota_icms: Number(i.aliquota_icms ?? 0), reducao_bc: Number(i.reducao_bc ?? 0),
+    cbenef: i.cbenef ?? null, cst_pis: i.cst_pis ?? null, aliquota_pis: Number(i.aliquota_pis ?? 0), cst_cofins: i.cst_cofins ?? null,
+    aliquota_cofins: Number(i.aliquota_cofins ?? 0), frete: fretes[k], xPed: i.pedido ?? null,
+  }));
+  let montado;
+  try {
+    montado = montarInfNFe55({
+      emitente: {
+        cnpj: empresa.cnpj, ie: empresa.inscricao_estadual, razao_social: empresa.razao_social, nome_fantasia: empresa.nome_fantasia,
+        crt: empresa.regime_tributario === "normal" ? 3 : empresa.regime_tributario === "mei" ? 4 : empresa.regime_tributario === "simples_excesso" ? 2 : 1,
+        uf: empresa.uf, municipio_ibge: empresa.municipio_ibge, endereco: empresa.endereco,
+      },
+      ambiente, serie, numero, codigo_numerico: codigo, emissao: new Date(),
+      natureza: d.natureza, finalidade: d.finalidade, presenca: d.presenca, consumidorFinal: d.consumidor_final,
+      destinatario: d.destinatario as Destinatario, itens,
+      frete: { modalidade: Number(d.frete?.modalidade ?? 9) as 0 | 1 | 2 | 9, volumes: d.frete?.volumes ?? null },
+      pagamentos: (d.pagamentos ?? []).map((p: Record<string, unknown>) => ({ forma: String(p.forma), valor: Number(p.valor) })),
+      referencias: d.referencias ?? [], informacoes: d.informacoes, respTecnico: empresa.resp_tecnico,
+    });
+  } catch (e) {
+    throw new ErroUsuario((e as Error).message);
+  }
+  const assinatura = assinar(montado.infNFe, "infNFe", `NFe${montado.chave}`, cert);
+  const nfe = `<NFe xmlns="${NS_NFE}">${montado.infNFe}${assinatura}</NFe>`;
+  await servico.from("nfe_documentos").update({
+    status: "pendente", ambiente, serie, numero, chave: montado.chave, codigo_numerico: codigo, xml_enviado: nfe,
+    valor_total: montado.vNF, codigo_status: null, motivo: null,
+  }).eq("id", d.id);
+  let retorno: string;
+  try {
+    retorno = await falar("autorizacao", empresa, lote(nfe), cert, 55);
+  } catch (e) {
+    if (!(e instanceof SemComunicacao)) throw e;
+    await servico.from("nfe_documentos").update({ motivo: `Sem resposta da SEFAZ: ${e.message}` }).eq("id", d.id);
+    throw new ErroUsuario("A SEFAZ não respondeu. A NF-e ficou pendente; use Consultar em alguns minutos.");
+  }
+  const prot = bloco(retorno, "protNFe");
+  const cStat = valor(prot ?? retorno, "cStat");
+  const motivo = valor(prot ?? retorno, "xMotivo");
+  if (prot && (cStat === "100" || cStat === "150")) return await finalizarNfe(usuario, d.id, nfe, prot, cStat, motivo);
+  await servico.from("nfe_documentos").update({ status: "rejeitada", codigo_status: cStat, motivo }).eq("id", d.id);
+  throw new ErroUsuario(`NF-e rejeitada pela SEFAZ (${cStat}): ${motivo}`);
+}
+
+async function consultarNfe(usuario: Usuario, id: string) {
+  const d = await carregarNfe(usuario, id);
+  if (d.status !== "pendente" || !d.chave) return d;
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  let ret: string;
+  try {
+    ret = await falar("consulta", empresa, consultaProtocolo(d.chave, Number(d.ambiente) as 1 | 2), cert, 55);
+  } catch (e) {
+    if (e instanceof SemComunicacao) throw new ErroUsuario("A SEFAZ continua sem responder. Tente de novo em alguns minutos.");
+    throw e;
+  }
+  const prot = bloco(ret, "protNFe");
+  if (prot && CONSULTA_AUTORIZADA.has(String(valor(prot, "cStat")))) return await finalizarNfe(usuario, d.id, d.xml_enviado, prot, String(valor(prot, "cStat")), valor(prot, "xMotivo"));
+  const cStat = valor(ret, "cStat");
+  if (CONSULTA_INEXISTENTE.has(String(cStat))) {
+    const { data } = await servico.from("nfe_documentos").update({ status: "rejeitada", codigo_status: cStat, motivo: "A nota não chegou à SEFAZ. Emita de novo." }).eq("id", d.id).select("*").single();
+    return data;
+  }
+  throw new ErroUsuario(`Situação na SEFAZ (${cStat}): ${valor(ret, "xMotivo")}`);
+}
+
+async function eventoNfe(empresa: { nfce_ambiente: number; uf: string }, cert: Certificado, infEvento: string) {
+  const id = infEvento.match(/Id="([^"]+)"/)![1];
+  const { evento, lote: loteEvento } = envelopeEvento(infEvento, assinar(infEvento, "infEvento", id, cert));
+  let retorno: string;
+  try {
+    retorno = await falar("evento", empresa, loteEvento, cert, 55);
+  } catch (e) {
+    if (e instanceof SemComunicacao) throw new ErroUsuario("Sem comunicação com a SEFAZ. Tente de novo em alguns minutos.");
+    throw e;
+  }
+  const ret = bloco(retorno, "retEvento");
+  const cStat = valor(ret ?? retorno, "cStat");
+  const motivo = valor(ret ?? retorno, "xMotivo");
+  if (!ret || !EVENTO_OK.has(String(cStat))) throw new ErroUsuario(`Evento recusado pela SEFAZ (${cStat}): ${motivo}`);
+  return { ret, cStat, motivo, protocolo: valor(ret, "nProt"), xml: `<procEventoNFe xmlns="${NS_NFE}" versao="1.00">${evento}${ret}</procEventoNFe>` };
+}
+
+async function cancelarNfe(usuario: Usuario, id: string, justificativa: string) {
+  const d = await carregarNfe(usuario, id);
+  if (d.status !== "autorizada") throw new ErroUsuario("Só NF-e autorizada pode ser cancelada.");
+  const just = validarJustificativa(justificativa ?? "", "o motivo do cancelamento");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  const { infEvento } = montarCancelamento({ chave: d.chave, protocolo: d.protocolo, cnpj: empresa.cnpj, uf: empresa.uf, ambiente: Number(d.ambiente) as 1 | 2, justificativa: just, quando: new Date() });
+  const r = await eventoNfe(empresa, cert, infEvento);
+  await servico.from("nfe_documentos").update({
+    status: "cancelada", cancelada_em: new Date().toISOString(), protocolo_cancelamento: r.protocolo, justificativa_cancelamento: just,
+    codigo_status: r.cStat, motivo: r.motivo, xml_cancelamento: r.xml,
+  }).eq("id", d.id);
+  let aviso: string | null = null;
+  if (d.estoque_movido) {
+    const { error } = await comoUsuario(usuario).rpc("movimentar_estoque_nfe", { p_nfe: d.id, p_estornar: true });
+    if (error) aviso = `A NF-e foi cancelada, mas o estoque não voltou: ${error.message}`;
+  }
+  return { cancelada: true, protocolo: r.protocolo, aviso };
+}
+
+async function cartaCorrecao(usuario: Usuario, id: string, correcao: string) {
+  const d = await carregarNfe(usuario, id);
+  if (d.status !== "autorizada") throw new ErroUsuario("A carta de correção vale só para NF-e autorizada.");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  const sequencia = (d.cces ?? []).length + 1;
+  let infEvento: string;
+  try {
+    ({ infEvento } = montarCartaCorrecao({ chave: d.chave, cnpj: empresa.cnpj, uf: empresa.uf, ambiente: Number(d.ambiente) as 1 | 2, correcao, quando: new Date(), sequencia }));
+  } catch (e) {
+    throw new ErroUsuario((e as Error).message);
+  }
+  const r = await eventoNfe(empresa, cert, infEvento);
+  const cces = [...(d.cces ?? []), { sequencia, correcao: correcao.trim(), protocolo: r.protocolo, quando: new Date().toISOString(), xml: r.xml }];
+  await servico.from("nfe_documentos").update({ cces }).eq("id", d.id);
+  return { sequencia, protocolo: r.protocolo };
 }
 
 Deno.serve(async (req) => {
@@ -431,6 +614,18 @@ Deno.serve(async (req) => {
     if (corpo.acao === "transmitir") return resposta(await transmitir(usuario.empresa_id));
     if (corpo.acao === "cancelar") return resposta(await cancelar(usuario, corpo.venda_id, corpo.justificativa));
     if (corpo.acao === "inutilizar") return resposta(await inutilizar(usuario, corpo));
+    if (corpo.acao === "nfe_emitir") {
+      const doc = await emitirNfe(usuario, corpo.nfe_id);
+      const { xml_enviado: _x, xml_autorizado: _y, ...semXml } = doc as Record<string, unknown>;
+      return resposta(semXml);
+    }
+    if (corpo.acao === "nfe_consultar") {
+      const doc = await consultarNfe(usuario, corpo.nfe_id);
+      const { xml_enviado: _x, xml_autorizado: _y, ...semXml } = doc as Record<string, unknown>;
+      return resposta(semXml);
+    }
+    if (corpo.acao === "nfe_cancelar") return resposta(await cancelarNfe(usuario, corpo.nfe_id, corpo.justificativa));
+    if (corpo.acao === "nfe_cce") return resposta(await cartaCorrecao(usuario, corpo.nfe_id, corpo.correcao));
     throw new ErroUsuario("Ação desconhecida.");
   } catch (e) {
     if (e instanceof Error) return resposta({ erro: e.message }, 400);

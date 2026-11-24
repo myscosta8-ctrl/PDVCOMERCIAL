@@ -8,7 +8,7 @@ const EMP = {
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
   pix_chave: '12345678000195', pix_nome: 'Farma Familia', pix_cidade: 'Breves', balanca: { ativo: true, digitos_codigo: 5, tipo: 'preco' },
-  impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
+  nfe_serie: 1, impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
   contador: { nome: 'Escritório Contábil Exemplo', cpf: '12345678909', crc: 'PA-012345/O' }, sped_perfil: 'A', cod_receita_icms: null,
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
 }
@@ -228,6 +228,17 @@ const TABELAS = {
     { id: 'nd2', venda_id: 'v8', numero: 313, serie: 1, status: 'contingencia', ambiente: 2, dh_contingencia: h(17, 5), criado_em: h(17, 5), motivo: 'Emitida em contingência; será transmitida quando a SEFAZ responder.', venda: { numero: 1049, total: 42.5 } },
     { id: 'nd3', venda_id: 'v4', numero: 307, serie: 1, status: 'cancelada', ambiente: 2, cancelada_em: h(14, 20), protocolo_cancelamento: '315260000098765', justificativa_cancelamento: 'Cliente desistiu da compra no caixa', venda: { numero: 1045, total: 18.4 } },
     { id: 'nd4', venda_id: 'v6', numero: 311, serie: 1, status: 'rejeitada', ambiente: 2, codigo_status: '778', motivo: 'Rejeição: Informado NCM inexistente' },
+  ],
+  nfe_documentos: [
+    { id: 'ne1', numero: 15, serie: 1, status: 'autorizada', natureza: 'Venda de mercadoria', finalidade: 1, ambiente: 2, valor_total: 486.5, emitida_em: h(10, 20), criado_em: h(10, 15),
+      chave: '15261112345678000195550010000000151876543210', protocolo: '315260000123456', cces: [],
+      destinatario: { nome: 'Clínica Bem-Estar Ltda', documento: '11.222.333/0001-81', endereco: { municipio: 'Breves', uf: 'PA' } },
+      itens: [{ descricao: 'Soro fisiológico 0,9%, 500 ml', quantidade: 30, valor_unitario: 8.9, desconto: 0, cfop: '5102' }, { descricao: 'Álcool etílico 70%, 1 litro', quantidade: 15, valor_unitario: 14.65, desconto: 0, cfop: '5102' }] },
+    { id: 'ne2', numero: 14, serie: 1, status: 'autorizada', natureza: 'Devolução de compra', finalidade: 4, ambiente: 2, valor_total: 184.26, emitida_em: '2026-11-18T14:00:00Z', criado_em: '2026-11-18T13:50:00Z',
+      chave: '15261112345678000195550010000000141876543219', protocolo: '315260000120001', cces: [{ sequencia: 1, correcao: 'Peso bruto correto: 3,2 kg', protocolo: '315260000120077', quando: '2026-11-18T15:00:00Z' }],
+      destinatario: { nome: 'Distribuidora Norte Farma Ltda', documento: '99.888.777/0001-66', endereco: { municipio: 'Belém', uf: 'PA' } }, itens: [{ descricao: 'Dipirona 500 mg', quantidade: 20, valor_unitario: 9.21, cfop: '5202' }] },
+    { id: 'ne3', numero: null, serie: null, status: 'rascunho', natureza: 'Venda de mercadoria', finalidade: 1, valor_total: 129.5, criado_em: h(16, 50),
+      destinatario: { nome: 'Mercadinho São José', documento: '22.333.444/0001-55' }, itens: [] },
   ],
   nfce_inutilizacoes: [{ id: 'i1', serie: 1, inicio: 290, fim: 291, criado_em: '2026-11-10T14:00:00Z', protocolo: '315260000054321', justificativa: 'Numeração pulada por falha do sistema emissor' }],
 }

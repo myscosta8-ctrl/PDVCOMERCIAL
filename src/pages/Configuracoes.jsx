@@ -164,10 +164,17 @@ export default function Configuracoes() {
         <h3 className="titulo-secao border-t border-papel-200 pt-4 dark:border-noite-700">Emissão de NFC-e</h3>
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="sm:col-span-2"><Campo rotulo="Ambiente de emissão"><Lista valor={Number(emp.nfce_ambiente)} opcoes={AMBIENTES} onMudar={mudarAmbiente} /></Campo></div>
-          <Campo rotulo="Série"><input className="campo" inputMode="numeric" value={emp.nfce_serie ?? 1} onChange={m('nfce_serie')} /></Campo>
+          <Campo rotulo="Série da NFC-e"><input className="campo" inputMode="numeric" value={emp.nfce_serie ?? 1} onChange={m('nfce_serie')} /></Campo>
+          <Campo rotulo="Série da NF-e"><input className="campo" inputMode="numeric" value={emp.nfe_serie ?? 1} onChange={m('nfe_serie')} /></Campo>
           <Campo rotulo="ID do CSC"><input className="campo" inputMode="numeric" value={emp.nfce_csc_id ?? ''} onChange={m('nfce_csc_id')} placeholder="ex.: 000001" /></Campo>
           <div className="sm:col-span-2"><Campo rotulo="Endereço do QR Code (homologação)"><input className="campo" value={emp.nfce_url_qrcode ?? ''} onChange={m('nfce_url_qrcode')} /></Campo></div>
           <div className="sm:col-span-2"><Campo rotulo="Endereço de consulta pela chave"><input className="campo" value={emp.nfce_url_consulta ?? ''} onChange={m('nfce_url_consulta')} /></Campo></div>
+          <div className="sm:col-span-4 grid gap-3 rounded-xl border border-papel-200 p-3 sm:grid-cols-4 dark:border-noite-700">
+            <p className="text-sm text-tinta-400 sm:col-span-4">Responsável técnico (opcional): algumas UFs exigem na NF-e os dados de quem fornece o sistema. Preencha só se a SEFAZ pedir.</p>
+            {[['cnpj', 'CNPJ'], ['contato', 'Nome do contato'], ['email', 'E-mail'], ['fone', 'Telefone']].map(([c, r]) => (
+              <Campo key={c} rotulo={r}><input className="campo" value={emp.resp_tecnico?.[c] ?? ''} onChange={(e) => setEmp((x) => ({ ...x, resp_tecnico: { ...(x.resp_tecnico || {}), [c]: e.target.value } }))} /></Campo>
+            ))}
+          </div>
           <label className="flex items-start gap-2 sm:col-span-4"><input type="checkbox" className="mt-1 h-4 w-4 accent-caixa-600" checked={emp.nfce_contingencia !== false} onChange={(e) => setEmp((x) => ({ ...x, nfce_contingencia: e.target.checked }))} />
             <span>Emitir em contingência quando a SEFAZ não responder<span className="block text-sm text-tinta-400">A venda não para: sai o DANFE em duas vias e a nota é transmitida sozinha quando a conexão voltar (prazo de 24 horas).</span></span></label>
         </div>
