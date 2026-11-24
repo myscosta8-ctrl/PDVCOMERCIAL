@@ -51,7 +51,26 @@ export function lerXmlNfe(xmlTexto) {
       lote: texto(r, 'nLote'), quantidade: num(texto(r, 'qLote')), fabricacao: texto(r, 'dFab'), validade: texto(r, 'dVal'),
     }))
     const ean = texto(prod, 'cEAN')
+    // Grupo do ICMS (ICMS00, ICMS10, ICMSSN102...) e valores para a escrituração (SPED)
+    const grupoIcms = caminho(imp, 'ICMS')?.children?.[0] ?? null
+    const icms = (nome) => (grupoIcms ? texto(grupoIcms, nome) : null)
+    const fiscal = {
+      cfop: texto(prod, 'CFOP'),
+      orig: icms('orig'),
+      cst: icms('CST') ?? null,
+      csosn: icms('CSOSN') ?? null,
+      vProd: num(texto(prod, 'vProd')),
+      vDesc: num(texto(prod, 'vDesc')),
+      vBC: num(icms('vBC')),
+      pICMS: num(icms('pICMS')),
+      vICMS: num(icms('vICMS')),
+      vBCST: num(icms('vBCST')),
+      pICMSST: num(icms('pICMSST')),
+      vICMSST: num(icms('vICMSST')),
+      vIPI: num(profundo(caminho(imp, 'IPI'), 'vIPI')),
+    }
     return {
+      fiscal,
       item: Number(det.getAttribute('nItem')),
       codigo: texto(prod, 'cProd'),
       ean: ean && /^\d{8,14}$/.test(ean) ? ean : null,
@@ -83,6 +102,17 @@ export function lerXmlNfe(xmlTexto) {
       inscricao_estadual: texto(emit, 'IE'),
       uf: texto(emit, 'enderEmit', 'UF'),
       telefone: texto(emit, 'enderEmit', 'fone'),
+      municipio_ibge: texto(emit, 'enderEmit', 'cMun'),
+      endereco: {
+        logradouro: texto(emit, 'enderEmit', 'xLgr'), numero: texto(emit, 'enderEmit', 'nro'), complemento: texto(emit, 'enderEmit', 'xCpl'),
+        bairro: texto(emit, 'enderEmit', 'xBairro'), municipio: texto(emit, 'enderEmit', 'xMun'), cep: texto(emit, 'enderEmit', 'CEP'),
+      },
+    },
+    fiscal: {
+      vBC: num(texto(tot, 'vBC')), vICMS: num(texto(tot, 'vICMS')), vBCST: num(texto(tot, 'vBCST')), vST: num(texto(tot, 'vST')),
+      vIPI: num(texto(tot, 'vIPI')), vPIS: num(texto(tot, 'vPIS')), vCOFINS: num(texto(tot, 'vCOFINS')), vFrete: num(texto(tot, 'vFrete')),
+      vSeg: num(texto(tot, 'vSeg')), vDesc: num(texto(tot, 'vDesc')), vOutro: num(texto(tot, 'vOutro')),
+      modFrete: texto(caminho(inf, 'transp'), 'modFrete'),
     },
     destinatario_cnpj: so(texto(dest, 'CNPJ') || texto(dest, 'CPF')),
     valor_produtos: num(texto(tot, 'vProd')),

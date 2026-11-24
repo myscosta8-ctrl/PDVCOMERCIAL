@@ -36,4 +36,9 @@ describe('leitura do XML da NF-e', () => {
   it('recusa arquivo que não é NF-e', () => {
     expect(() => lerXmlNfe('<a/>')).toThrow('não é uma NF-e')
   })
+  it('guarda os dados fiscais do item para o SPED', () => {
+    const n = lerXmlNfe(XML)
+    expect(n.itens[0].fiscal).toMatchObject({ cfop: '5102', vICMSST: 6 })
+    expect(n.fiscal).toHaveProperty('vICMS')
+  })
 })

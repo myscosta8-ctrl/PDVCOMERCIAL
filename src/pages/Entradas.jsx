@@ -207,6 +207,7 @@ function Importacao({ dados, onFechar, onConcluir }) {
       const c = calc(l)
       const item = {
         codigo_fornecedor: l.xml.codigo, descricao: l.xml.descricao, fator: c.fator, quantidade: c.qtd, custo_unitario: arred(c.custo, 4),
+        n_item: l.xml.item, fiscal: l.xml.fiscal,
         lote: l.lote || null, validade: l.validade || null, fabricacao: l.fabricacao || null,
       }
       if (l.produto) {
@@ -220,7 +221,7 @@ function Importacao({ dados, onFechar, onConcluir }) {
     setEnviando(true)
     const { data, error } = await supabase.rpc('registrar_entrada_nfe', { p_nota: {
       chave: nota.chave, numero: nota.numero, serie: nota.serie, emissao: nota.emissao,
-      valor_produtos: nota.valor_produtos, valor_total: nota.valor_total, duplicatas: nota.duplicatas, fornecedor: nota.fornecedor, itens,
+      valor_produtos: nota.valor_produtos, valor_total: nota.valor_total, duplicatas: nota.duplicatas, fornecedor: nota.fornecedor, fiscal: nota.fiscal, itens,
     } })
     setEnviando(false)
     if (error) { avisar(mensagemErro(error), 'erro'); return }

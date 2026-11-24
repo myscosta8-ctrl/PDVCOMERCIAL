@@ -86,7 +86,7 @@ async function emitir(empresaId: string, vendaId: string) {
 
   const [{ data: itens }, { data: pagamentos }] = await Promise.all([
     servico.from("venda_itens")
-      .select("sequencia, quantidade, preco_unitario, desconto, descricao, produto:produtos(id, codigo, ean, ncm, cest, cfop, unidade, origem, csosn, cst_icms)")
+      .select("sequencia, quantidade, preco_unitario, desconto, descricao, cfop, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, origem, ncm, cest, cbenef, produto:produtos(id, codigo, ean, ncm, cest, cfop, unidade, origem, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cbenef)")
       .eq("venda_id", vendaId).order("sequencia"),
     servico.from("venda_pagamentos").select("forma, valor").eq("venda_id", vendaId),
   ]);
@@ -116,11 +116,15 @@ async function emitir(empresaId: string, vendaId: string) {
     ambiente, serie, numero, codigo_numerico: codigo, emissao: new Date(),
     itens: itens.map((i, k) => {
       const p = i.produto as Record<string, unknown>;
+      // Vale a tributação fotografada na venda; o cadastro do produto é só a reserva para vendas antigas
+      const f = (campo: string) => ((i as Record<string, unknown>)[campo] ?? p[campo]) as never;
       return {
         codigo: String(p.codigo || String(p.id).slice(0, 8)), ean: p.ean as string, descricao: i.descricao,
-        ncm: String(p.ncm ?? ""), cest: p.cest as string, cfop: String(p.cfop || "5102"), unidade: String(p.unidade || "UN"),
+        ncm: String(f("ncm") ?? ""), cest: f("cest"), cfop: String(f("cfop") || "5102"), unidade: String(p.unidade || "UN"),
         quantidade: Number(i.quantidade), valor_unitario: Number(i.preco_unitario), desconto: descontos[k],
-        origem: Number(p.origem ?? 0), csosn: p.csosn as string, cst_icms: p.cst_icms as string,
+        origem: Number(f("origem") ?? 0), csosn: f("csosn"), cst_icms: f("cst_icms"),
+        aliquota_icms: Number(f("aliquota_icms") ?? 0), reducao_bc: Number(f("reducao_bc") ?? 0), cbenef: f("cbenef"),
+        cst_pis: f("cst_pis"), aliquota_pis: Number(f("aliquota_pis") ?? 0), cst_cofins: f("cst_cofins"), aliquota_cofins: Number(f("aliquota_cofins") ?? 0),
       };
     }),
     pagamentos: (pagamentos ?? []).map((p) => ({ forma: p.forma, valor: Number(p.valor) })),

@@ -7,11 +7,12 @@ const EMP = {
   inscricao_estadual: '151234567', uf: 'PA', municipio_ibge: '1501808', regime_tributario: 'simples', nfce_ambiente: 2, nfce_serie: 1,
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
+  contador: { nome: 'Escritório Contábil Exemplo', cpf: '12345678909', crc: 'PA-012345/O' }, sped_perfil: 'A', cod_receita_icms: null,
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
 }
 const P = (id, descricao, ean, preco_venda, preco_custo, estoque_atual, estoque_minimo, extra = {}) => ({
   id, descricao, ean, codigo: String(100 + Number(id.slice(1))), preco_venda, preco_custo, estoque_atual, estoque_minimo, unidade: 'UN',
-  ncm: '30049099', cfop: '5102', csosn: '102', origem: 0, ativo: true, controlado: false, controla_lote: true, produto_pai_id: null, atributos: {}, ...extra,
+  ncm: '30049099', cfop: '5102', csosn: '102', origem: 0, ativo: true, controlado: false, controla_lote: true, produto_pai_id: null, atributos: {}, regra_fiscal_id: extra.ncm === undefined ? 'rf2' : extra.ncm ? 'rf1' : null, ...extra,
 })
 const PRODUTOS = [
   P('p1', 'Dipirona Monoidratada 500 mg, 10 comprimidos', '7896004700120', 6.9, 2.35, 84, 20),
@@ -198,6 +199,11 @@ const TABELAS = {
     { id: 'ti2', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', ean: '7896004700120', unidade: 'UN', quantidade: 40, quantidade_recebida: null, lote_numero: 'DP2702C', validade: '2027-08-30' },
     { id: 'ti3', descricao: 'Soro fisiológico 0,9%, 500 ml', ean: '7896181900012', unidade: 'UN', quantidade: 12, quantidade_recebida: null, lote_numero: null, validade: null },
   ],
+  regras_fiscais: [
+    { id: 'rf1', nome: 'Padrão', ativo: true, prioridade: 100, ncm_prefixo: null, origem: null, cfop: '5102', csosn: '102', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '49', aliquota_pis: 0, cst_cofins: '49', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: null },
+    { id: 'rf2', nome: 'Medicamentos com substituição tributária', ativo: true, prioridade: 100, ncm_prefixo: '3004', origem: null, cfop: '5405', csosn: '500', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '04', aliquota_pis: 0, cst_cofins: '04', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: 'Conferido com o contador' },
+    { id: 'rf3', nome: 'Higiene pessoal monofásico', ativo: true, prioridade: 100, ncm_prefixo: '3305', origem: null, cfop: '5405', csosn: '500', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '04', aliquota_pis: 0, cst_cofins: '04', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: null },
+  ],
   nfce_documentos: [{ numero: 312, serie: 1, status: 'autorizada', ambiente: 2, chave: '15261112345678000195650010000003121123456788' }],
 }
 const RPC = {
@@ -220,6 +226,26 @@ const RPC = {
   situacao_cliente: { limite: 500, saldo_devedor: 65.5, disponivel: 434.5, em_atraso: 0, dias_atraso: 0, vale: 30, bloqueado: false, convenio: null },
   credenciais_configuradas: { certificado: true, senha: true, csc: true },
   lotes_alerta: { vencidos: 1, vencendo: 3, lista: [] },
+  aplicar_regras_fiscais: { alterados: 3, sem_regra: 0, amostra: [
+    { descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', ncm: '30049099', regra: 'Medicamentos com substituição tributária', antes: { cfop: '5102', csosn: '102' }, depois: { cfop: '5405', csosn: '500' } },
+    { descricao: 'Paracetamol 750 mg, 20 comprimidos', ncm: '30049099', regra: 'Medicamentos com substituição tributária', antes: { cfop: '5102', csosn: '102' }, depois: { cfop: '5405', csosn: '500' } },
+    { descricao: 'Protetor solar FPS 50, 120 ml', ncm: '33049910', regra: 'Padrão', antes: { cfop: '5405', csosn: '500' }, depois: { cfop: '5102', csosn: '102' } },
+  ] },
+  conferir_cmed: { tabela: 24816, atualizada_em: '2026-11-03T14:20:00Z', coluna: 'PMC 19 %', ligados: 412, abaixo: 380, sem_ean_medicamento: 7, acima: [
+    { id: 'p2', descricao: 'Paracetamol 750 mg, 20 comprimidos', ean: '7896714200156', preco_venda: 12.5, pmc: 11.38 },
+    { id: 'p5', descricao: 'Clonazepam 2 mg, 30 comprimidos', ean: '7896004711232', preco_venda: 18.4, pmc: 17.95 },
+  ] },
+  dados_sped: {
+    empresa: EMP,
+    notas: [{ chave: '15261111222333000144550010000884121000012345', numero: 88412, serie: 1, emissao: '2026-10-21T09:00:00-03:00', entrada: '2026-10-21T14:00:00Z',
+      valor_produtos: 1842.6, valor_total: 1842.6, duplicatas: [{ vencimento: '2026-11-20', valor: 921.3 }, { vencimento: '2026-12-20', valor: 921.3 }], fiscal: { modFrete: '0' },
+      fornecedor: { cnpj: '11222333000144', razao_social: 'Distribuidora Norte Farma Ltda', inscricao_estadual: '151111111', municipio_ibge: '1501402', endereco: { logradouro: 'Av. Almirante Barroso', numero: '1000', bairro: 'Marco' } },
+      itens: [{ n_item: 1, cod_item: '101', unidade: 'UN', quantidade: 240, custo_unitario: 2.35, fiscal: { cfop: '5405', orig: '0', cst: '60', vProd: 564 } },
+              { n_item: 2, cod_item: '108', unidade: 'UN', quantidade: 200, custo_unitario: 6.393, fiscal: { cfop: '5405', orig: '0', cst: '60', vProd: 1278.6 } }] }],
+    produtos: [{ cod_item: '101', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', ean: '7896004700120', unidade: 'UN', ncm: '30049099', aliquota_icms: 0 },
+               { cod_item: '108', descricao: 'Vitamina C 1 g efervescente, 10 comprimidos', ean: '7896112402158', unidade: 'UN', ncm: '30049099', aliquota_icms: 0 }],
+    inventario: [],
+  },
   filiais: [{ id: 'e2', nome: 'Farma Família Centro', cnpj: '12345678000276' }],
   painel_financeiro: {
     hoje: new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 10), dias_mes: 30,
@@ -242,7 +268,7 @@ function consulta(tabela) {
   let linhas = [...(TABELAS[tabela] ?? [])]
   let unico = false
   const q = {
-    select: () => q, order: () => q, limit: () => q, gte: () => q, lt: () => q, in: () => q, ilike: () => q,
+    select: () => q, not: () => q, range: () => q, lte: () => q, order: () => q, limit: () => q, gte: () => q, lt: () => q, in: () => q, ilike: () => q,
     or: (expr) => {
       const conds = expr.split(',').map((c) => c.split('.'))
       linhas = linhas.filter((l) => conds.some(([campo, op, ...v]) => {

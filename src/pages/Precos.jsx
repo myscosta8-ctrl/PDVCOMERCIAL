@@ -4,6 +4,7 @@ import { useSessao } from '../lib/sessao.js'
 import { dinheiro, lerNumero } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Confirmacao, Etiqueta, Icone, Indicador, Lista, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { BuscaProduto } from '../components/BuscaProduto.jsx'
+import { TabelaCmed } from '../components/Cmed.jsx'
 
 const TIPOS = [
   { valor: 'preco', texto: 'Preço promocional' },
@@ -31,6 +32,7 @@ export default function Precos() {
   const perfil = useSessao()
   const avisar = useAviso()
   const gestor = perfil.papel !== 'operador'
+  const farmacia = perfil.empresa.segmento === 'farmacia'
   const [aba, setAba] = useState('promocoes')
   const [promos, setPromos] = useState(null)
   const [tabelas, setTabelas] = useState([])
@@ -129,14 +131,24 @@ export default function Precos() {
   const ativas = (promos ?? []).filter((p) => situacao(p).texto === 'Ativa agora')
   const agendadas = (promos ?? []).filter((p) => situacao(p).texto === 'Agendada')
 
+  const barraAbas = (
+          <div className="inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
+      {[['promocoes', 'Promoções'], ['tabelas', 'Tabelas de preço'], ...(farmacia && gestor ? [['cmed', 'Tabela CMED (medicamentos)']] : [])].map(([id, nome]) => (
+        <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
+      ))}
+    </div>
+  )
+
   return (
     <div className="mx-auto max-w-7xl">
       <Cabecalho titulo="Preços e promoções" descricao="Promoções por período, preço por quantidade e tabelas de preço para clientes">
-        {gestor && (aba === 'promocoes'
+        {gestor && aba !== 'cmed' && (aba === 'promocoes'
           ? <Botao icone="mais" onClick={() => setPromo(PROMO_VAZIA())}>Nova promoção</Botao>
           : <Botao icone="mais" onClick={() => setTabela({ ...TABELA_VAZIA, itens: [] })}>Nova tabela de preço</Botao>)}
       </Cabecalho>
 
+      {aba === 'cmed' ? <><div className="mb-4">{barraAbas}</div><TabelaCmed /></> : <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Indicador titulo="Promoções ativas hoje" icone="dinheiro" tom={ativas.length ? 'positivo' : 'neutro'} valor={ativas.length} detalhe={ativas.slice(0, 2).map((p) => p.nome).join(', ') || 'Nenhuma no momento'} />
         <Indicador titulo="Agendadas" icone="relogio" valor={agendadas.length} detalhe="Começam nos próximos dias" />
@@ -146,12 +158,7 @@ export default function Precos() {
 
       <div className="mt-4 cartao overflow-hidden">
         <div className="border-b border-papel-200 p-3 dark:border-noite-700">
-          <div className="inline-flex gap-1 rounded-lg bg-papel-200 p-1 dark:bg-noite-700" role="tablist">
-            {[['promocoes', 'Promoções'], ['tabelas', 'Tabelas de preço']].map(([id, nome]) => (
-              <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${aba === id ? 'bg-white shadow-sm dark:bg-noite-800' : 'text-tinta-600 dark:text-tinta-300'}`}>{nome}</button>
-            ))}
-          </div>
+          {barraAbas}
         </div>
         {promos === null ? <p className="p-5 text-sm text-tinta-400">Carregando…</p> : aba === 'promocoes' ? (
           promos.length === 0 ? <Vazio icone="dinheiro" titulo="Nenhuma promoção" texto="Crie promoções com preço especial, desconto por categoria ou preço de atacado a partir de uma quantidade. O caixa aplica sozinho." /> : (
@@ -196,6 +203,8 @@ export default function Precos() {
           )
         )}
       </div>
+
+      </>}
 
       <TelaSuspensa aberta={!!promo} titulo={promo?.id ? 'Editar promoção' : 'Nova promoção'} subtitulo="No caixa vale sempre o menor preço entre o normal, a tabela do cliente e as promoções do dia" onFechar={() => setPromo(null)} largura="max-w-3xl"
         rodape={<>
