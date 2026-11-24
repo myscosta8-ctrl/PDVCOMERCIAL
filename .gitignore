@@ -4,3 +4,4 @@ dist
 .env.local
 *.pfx
 *.p12
+dist-demo

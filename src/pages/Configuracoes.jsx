@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { chamarNfce } from '../lib/nfce.js'
 import { dataHora } from '../lib/formato.js'
-import { Botao, Campo, Lista, Confirmacao, useAviso } from '../components/ui.jsx'
+import { Botao, Cabecalho, Campo, Lista, Confirmacao, Icone, useAviso } from '../components/ui.jsx'
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map((u) => ({ valor: u, texto: u }))
 const REGIMES = [
@@ -49,7 +49,7 @@ export default function Configuracoes() {
   }
   useEffect(() => { carregar() }, [])
 
-  if (!emp) return <p className="text-sm text-slate-500">Carregando…</p>
+  if (!emp) return <p className="text-sm text-tinta-400">Carregando…</p>
 
   const m = (c) => (e) => setEmp((x) => ({ ...x, [c]: e.target.value }))
   const me = (c) => (e) => setEmp((x) => ({ ...x, endereco: { ...x.endereco, [c]: e.target.value } }))
@@ -98,9 +98,10 @@ export default function Configuracoes() {
   const mudarAmbiente = (v) => (v === 1 ? setConfirmarProducao(true) : setEmp((x) => ({ ...x, nfce_ambiente: 2 })))
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="mx-auto max-w-7xl space-y-4">
+      <Cabecalho titulo="Configurações" descricao="Dados da empresa, emissão de NFC-e e certificado digital" />
       <section className="cartao space-y-4 p-5">
-        <h2 className="text-lg font-bold">Dados da empresa</h2>
+        <h2 className="titulo-secao">Dados da empresa</h2>
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="sm:col-span-2"><Campo rotulo="Razão social"><input className="campo" value={emp.razao_social ?? ''} onChange={m('razao_social')} /></Campo></div>
           <div className="sm:col-span-2"><Campo rotulo="Nome fantasia"><input className="campo" value={emp.nome_fantasia ?? ''} onChange={m('nome_fantasia')} /></Campo></div>
@@ -118,7 +119,7 @@ export default function Configuracoes() {
           <Campo rotulo="Telefone"><input className="campo" inputMode="tel" value={emp.endereco.fone} onChange={me('fone')} /></Campo>
         </div>
 
-        <h3 className="pt-2 font-bold">NFC-e</h3>
+        <h3 className="titulo-secao border-t border-papel-200 pt-4 dark:border-noite-700">Emissão de NFC-e</h3>
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="sm:col-span-2"><Campo rotulo="Ambiente de emissão"><Lista valor={Number(emp.nfce_ambiente)} opcoes={AMBIENTES} onMudar={mudarAmbiente} /></Campo></div>
           <Campo rotulo="Série"><input className="campo" inputMode="numeric" value={emp.nfce_serie ?? 1} onChange={m('nfce_serie')} /></Campo>
@@ -130,20 +131,20 @@ export default function Configuracoes() {
       </section>
 
       <section className="cartao space-y-4 p-5">
-        <h2 className="text-lg font-bold">Certificado digital e CSC</h2>
-        <p className="text-sm text-slate-500">Ficam guardados no cofre criptografado do servidor. Ninguém consegue visualizá-los depois de salvos.</p>
+        <h2 className="titulo-secao">Certificado digital e CSC</h2>
+        <p className="text-sm text-tinta-400">Ficam guardados no cofre criptografado do servidor. Ninguém consegue visualizá-los depois de salvos.</p>
         <div className="grid gap-2 text-sm sm:grid-cols-3">
           <Situacao ok={cred.certificado} texto="Certificado A1" />
           <Situacao ok={cred.senha} texto="Senha do certificado" />
           <Situacao ok={cred.csc} texto="CSC" />
         </div>
         {emp.certificado_titular && (
-          <p className="text-sm">Titular: <strong>{emp.certificado_titular}</strong> · válido até {dataHora(emp.certificado_validade)}</p>
+          <p className="text-sm">Titular: <strong>{emp.certificado_titular}</strong>, válido até {dataHora(emp.certificado_validade)}</p>
         )}
         <div className="grid gap-3 sm:grid-cols-3">
           <Campo rotulo="Arquivo do certificado (.pfx)">
             <label className="campo flex cursor-pointer items-center justify-between">
-              <span className={arquivo ? '' : 'text-slate-400'}>{arquivo ? arquivo.name : 'Selecionar arquivo…'}</span>
+              <span className={arquivo ? '' : 'text-tinta-300'}>{arquivo ? arquivo.name : 'Selecionar arquivo…'}</span>
               <input type="file" accept=".pfx,.p12" className="hidden" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
             </label>
           </Campo>
@@ -151,11 +152,11 @@ export default function Configuracoes() {
           <Campo rotulo="CSC (token)"><input type="password" className="campo" value={csc} onChange={(e) => setCsc(e.target.value)} autoComplete="off" /></Campo>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <Botao variante="secundario" onClick={testar} carregando={salvando === 'teste'}>Testar comunicação com a SEFAZ</Botao>
+          <Botao variante="secundario" icone="nota" onClick={testar} carregando={salvando === 'teste'}>Testar comunicação com a SEFAZ</Botao>
           <Botao onClick={salvarCredenciais} carregando={salvando === 'cred'}>Salvar no cofre</Botao>
         </div>
         {teste && (
-          <div className="rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+          <div className="rounded-xl border border-papel-200 p-4 text-[0.95rem] dark:border-noite-700">
             <p>Certificado: <strong>{teste.titular}</strong> (válido até {dataHora(teste.validade)})</p>
             <p>SEFAZ: <strong>{teste.sefaz.codigo}</strong> – {teste.sefaz.mensagem}</p>
           </div>
@@ -177,8 +178,8 @@ export default function Configuracoes() {
 
 function Situacao({ ok, texto }) {
   return (
-    <div className={`rounded-lg px-3 py-2 ${ok ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
-      {ok ? '✓' : '•'} {texto} {ok ? 'configurado' : 'pendente'}
+    <div className={`flex items-center gap-2 rounded-lg px-3 py-2 ${ok ? 'bg-caixa-50 text-caixa-700 dark:bg-caixa-700/20 dark:text-caixa-300' : 'bg-ambar-50 text-ambar-600 dark:bg-ambar-600/10 dark:text-ambar-300'}`}>
+      <Icone nome={ok ? 'ok' : 'alerta'} className="h-4 w-4" />{texto}: {ok ? 'configurado' : 'pendente'}
     </div>
   )
 }

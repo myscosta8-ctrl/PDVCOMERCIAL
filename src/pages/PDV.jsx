@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
+import { useSessao } from '../lib/sessao.js'
 import { useCaixaAberto } from '../lib/caixa.js'
 import { adicionar, alterarQuantidade, remover, totais, totalItem, paraEnvio, lerCodigo } from '../lib/carrinho.js'
 import { dinheiro, lerNumero, arred } from '../lib/formato.js'
-import { Botao, Campo, Confirmacao, TelaSuspensa, useAviso } from '../components/ui.jsx'
+import { Botao, Campo, Confirmacao, Etiqueta, Icone, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
 
 const FORMAS = [
@@ -15,35 +16,47 @@ const FORMAS = [
 ]
 const nomeForma = (f) => FORMAS.find((x) => x.forma === f)?.texto ?? f
 
+function Tecla({ children }) {
+  return <kbd className="num rounded border border-papel-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-tinta-600 dark:border-noite-600 dark:bg-noite-700 dark:text-tinta-300">{children}</kbd>
+}
+
 export default function PDV() {
+  const perfil = useSessao()
   const { caixa } = useCaixaAberto()
   const avisar = useAviso()
   const busca = useRef(null)
   const [termo, setTermo] = useState('')
   const [resultados, setResultados] = useState([])
   const [itens, setItens] = useState([])
+  const [destaque, setDestaque] = useState(null)
   const [pagamentoAberto, setPagamentoAberto] = useState(false)
   const [limparAberto, setLimparAberto] = useState(false)
   const [ultima, setUltima] = useState(null)
   const t = useMemo(() => totais(itens), [itens])
+  const qtdItens = itens.reduce((s, i) => s + i.quantidade, 0)
 
   useEffect(() => {
     const tecla = (e) => {
       if (e.key === 'F2') { e.preventDefault(); busca.current?.focus() }
       if (e.key === 'F4' && itens.length) { e.preventDefault(); setPagamentoAberto(true) }
+      if (e.key === 'F8' && itens.length) { e.preventDefault(); setLimparAberto(true) }
     }
     window.addEventListener('keydown', tecla)
     return () => window.removeEventListener('keydown', tecla)
   }, [itens.length])
 
-  if (caixa === undefined) return <p className="text-sm text-slate-500">Carregando…</p>
+  if (caixa === undefined) return <p className="text-sm text-tinta-400">Carregando…</p>
   if (!caixa) {
     return (
-      <div className="cartao mx-auto max-w-md p-6 text-center">
-        <h2 className="mb-2 text-lg font-bold">Caixa fechado</h2>
-        <p className="text-sm text-slate-500">Abra o caixa na tela “Caixa” para iniciar as vendas.</p>
+      <div className="cartao mx-auto max-w-lg">
+        <Vazio icone="caixa" titulo="O caixa está fechado" texto="Para registrar vendas, abra o caixa deste terminal na tela Caixa, informando o fundo de troco." />
       </div>
     )
+  }
+
+  const incluir = (p, qtd) => {
+    setItens((c) => adicionar(c, p, qtd))
+    setDestaque({ ...p, qtdIncluida: qtd })
   }
 
   const pesquisar = async (e) => {
@@ -51,28 +64,29 @@ export default function PDV() {
     const { quantidade, termo: q } = lerCodigo(termo)
     if (!q) return
     if (!(quantidade > 0)) { avisar('Quantidade inválida.', 'erro'); return }
-    const soNumeros = /^\d{6,14}$/.test(q)
-    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo').eq('ativo', true).limit(20)
-    consulta = soNumeros ? consulta.or(`ean.eq.${q},codigo.eq.${q}`) : consulta.or(`descricao.ilike.%${q.replace(/[%,()]/g, '')}%,codigo.eq.${q.replace(/[%,()]/g, '')}`)
+    const limpo = q.replace(/[%,()]/g, '')
+    const soNumeros = /^\d{6,14}$/.test(limpo)
+    let consulta = supabase.from('produtos').select('id, descricao, unidade, preco_venda, estoque_atual, ean, codigo, controlado').eq('ativo', true).limit(20)
+    consulta = soNumeros ? consulta.or(`ean.eq.${limpo},codigo.eq.${limpo}`) : consulta.or(`descricao.ilike.%${limpo}%,codigo.eq.${limpo}`)
     const { data, error } = await consulta
     if (error) { avisar(mensagemErro(error), 'erro'); return }
     if (data.length === 1) {
-      setItens((c) => adicionar(c, data[0], quantidade))
+      incluir(data[0], quantidade)
       setTermo(''); setResultados([])
     } else if (data.length === 0) {
-      avisar('Produto não encontrado.', 'erro')
+      avisar(`Nenhum produto encontrado para "${q}".`, 'erro')
     } else {
       setResultados(data.map((p) => ({ ...p, _qtd: quantidade })))
     }
   }
 
   const escolher = (p) => {
-    setItens((c) => adicionar(c, p, p._qtd))
+    incluir(p, p._qtd)
     setResultados([]); setTermo(''); busca.current?.focus()
   }
 
   const concluida = async (r) => {
-    setUltima({ ...r, nfce: null }); setItens([]); setPagamentoAberto(false)
+    setUltima({ ...r, nfce: null }); setItens([]); setDestaque(null); setPagamentoAberto(false)
     avisar(`Venda nº ${r.numero} concluída.`)
     busca.current?.focus()
     // Emite a NFC-e automaticamente quando a configuração fiscal já foi testada
@@ -91,79 +105,154 @@ export default function PDV() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-      <section className="space-y-4">
-        <form onSubmit={pesquisar} className="cartao p-4">
-          <label className="rotulo">Código de barras, código ou descrição (F2) — use 3*código para quantidade</label>
-          <input ref={busca} className="campo text-lg" value={termo} onChange={(e) => setTermo(e.target.value)} autoFocus placeholder="Bipe ou digite e tecle Enter" />
+    <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[1fr_380px]">
+      <section className="min-w-0 space-y-4">
+        <form onSubmit={pesquisar} className="cartao flex items-center gap-3 p-3 pl-4">
+          <Icone nome="busca" className="h-6 w-6 shrink-0 text-tinta-400" />
+          <input
+            ref={busca}
+            className="min-w-0 flex-1 bg-transparent py-2 text-xl outline-none placeholder:text-tinta-300"
+            value={termo}
+            onChange={(e) => setTermo(e.target.value)}
+            autoFocus
+            placeholder="Leia o código de barras ou digite o nome do produto"
+            aria-label="Buscar produto"
+          />
+          <Botao type="submit">Incluir</Botao>
         </form>
 
+        {destaque && (
+          <div className="cartao flex flex-wrap items-center gap-x-8 gap-y-2 border-l-4 border-l-caixa-500 p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-tinta-400">Último item incluído</p>
+              <p className="truncate text-xl font-semibold">{destaque.descricao}</p>
+              <p className="text-sm text-tinta-400">Código {destaque.ean || destaque.codigo || 'não informado'}</p>
+            </div>
+            <div className="num text-right">
+              <p className="font-sans text-sm text-tinta-400">Preço unitário</p>
+              <p className="text-2xl font-semibold">{dinheiro(destaque.preco_venda)}</p>
+            </div>
+            <div className="num text-right">
+              <p className="font-sans text-sm text-tinta-400">Em estoque</p>
+              <p className={`text-2xl font-semibold ${Number(destaque.estoque_atual) - destaque.qtdIncluida < 0 ? 'text-rubro-600' : ''}`}>{Number(destaque.estoque_atual)} {destaque.unidade}</p>
+            </div>
+            {destaque.controlado && <Etiqueta tom="critico">Medicamento controlado: confira a receita</Etiqueta>}
+          </div>
+        )}
+
         <div className="cartao overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/60">
-              <tr><th className="px-3 py-2">#</th><th className="px-3 py-2">Produto</th><th className="px-3 py-2 text-right">Qtd</th><th className="px-3 py-2 text-right">Unitário</th><th className="px-3 py-2 text-right">Total</th><th /></tr>
-            </thead>
-            <tbody>
-              {itens.length === 0 && <tr><td colSpan={6} className="px-3 py-10 text-center text-slate-400">Nenhum item na venda</td></tr>}
-              {itens.map((i, n) => (
-                <tr key={i.chave} className="border-t border-slate-100 dark:border-slate-800">
-                  <td className="px-3 py-2 text-slate-400">{n + 1}</td>
-                  <td className="px-3 py-2">{i.descricao}</td>
-                  <td className="px-3 py-2 text-right">
-                    <input
-                      key={i.quantidade}
-                      className="campo w-20 py-1 text-right"
-                      inputMode="decimal"
-                      defaultValue={String(i.quantidade).replace('.', ',')}
-                      onBlur={(e) => {
-                        const q = lerNumero(e.target.value)
-                        setItens((c) => alterarQuantidade(c, i.chave, Number.isNaN(q) ? i.quantidade : q))
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-right">{dinheiro(i.preco_unitario)}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{dinheiro(totalItem(i))}</td>
-                  <td className="px-3 py-2 text-right">
-                    <button className="text-red-500 hover:text-red-700" onClick={() => setItens((c) => remover(c, i.chave))} title="Remover item">✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {itens.length === 0 ? (
+            <Vazio icone="pdv" titulo="Nenhum item nesta venda" texto="Leia o código de barras do produto. Para várias unidades, digite a quantidade, um asterisco e o código (ex.: 3*7891234567895)." />
+          ) : (
+            <table className="tabela w-full text-[0.95rem]">
+              <thead className="bg-papel/70 dark:bg-noite/40">
+                <tr><th className="w-12">Item</th><th>Produto</th><th className="text-right">Quantidade</th><th className="text-right">Unitário</th><th className="text-right">Total</th><th className="w-12" /></tr>
+              </thead>
+              <tbody>
+                {itens.map((i, n) => (
+                  <tr key={i.chave} className={n === itens.length - 1 ? 'bg-caixa-50/60 dark:bg-caixa-700/10' : ''}>
+                    <td className="num text-tinta-400">{n + 1}</td>
+                    <td className="font-medium">{i.descricao}</td>
+                    <td className="text-right">
+                      <input
+                        key={i.quantidade}
+                        className="campo num w-20 py-1 text-right"
+                        inputMode="decimal"
+                        aria-label={`Quantidade de ${i.descricao}`}
+                        defaultValue={String(i.quantidade).replace('.', ',')}
+                        onBlur={(e) => {
+                          const q = lerNumero(e.target.value)
+                          setItens((c) => alterarQuantidade(c, i.chave, Number.isNaN(q) ? i.quantidade : q))
+                        }}
+                      />
+                    </td>
+                    <td className="num text-right">{dinheiro(i.preco_unitario)}</td>
+                    <td className="num text-right font-semibold">{dinheiro(totalItem(i))}</td>
+                    <td className="text-right">
+                      <button className="rounded p-1 text-tinta-400 hover:bg-rubro-50 hover:text-rubro-600" onClick={() => setItens((c) => remover(c, i.chave))} title="Remover item" aria-label={`Remover ${i.descricao}`}>
+                        <Icone nome="lixo" className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-tinta-400">
+          <span><Tecla>F2</Tecla> buscar produto</span>
+          <span><Tecla>F4</Tecla> finalizar venda</span>
+          <span><Tecla>F8</Tecla> cancelar venda</span>
+          <span><Tecla>1</Tecla> a <Tecla>5</Tecla> forma de pagamento</span>
+          <span><Tecla>Esc</Tecla> fechar janela</span>
         </div>
       </section>
 
       <aside className="space-y-4">
-        <div className="cartao p-5">
-          <p className="rotulo">Total da venda</p>
-          <p className="text-4xl font-bold text-marca-600">{dinheiro(t.total)}</p>
-          <p className="mt-1 text-sm text-slate-500">{itens.length} {itens.length === 1 ? 'item' : 'itens'}</p>
-          <div className="mt-5 flex gap-2">
-            <Botao variante="secundario" className="flex-1" disabled={!itens.length} onClick={() => setLimparAberto(true)}>Cancelar venda</Botao>
-            <Botao variante="sucesso" className="flex-1" disabled={!itens.length} onClick={() => setPagamentoAberto(true)}>Finalizar (F4)</Botao>
+        {/* Cupom: a peça central da tela */}
+        <div className="drop-shadow-[0_8px_16px_rgba(22,37,45,0.12)]">
+          <div className="rounded-t-xl bg-white px-5 pb-4 pt-5 dark:bg-noite-800">
+            <div className="text-center">
+              <p className="font-semibold">{perfil.empresa.nome_fantasia || perfil.empresa.razao_social}</p>
+              <p className="text-sm text-tinta-400">Terminal {caixa.numero_terminal}, operador {perfil.nome.split(' ')[0]}</p>
+            </div>
+            <div className="my-4 border-t border-dashed border-papel-300 dark:border-noite-600" />
+            <div className="max-h-56 space-y-1.5 overflow-auto text-sm">
+              {itens.length === 0 && <p className="text-center text-tinta-400">Aguardando o primeiro item</p>}
+              {itens.map((i) => (
+                <div key={i.chave} className="flex justify-between gap-3">
+                  <span className="min-w-0 truncate">{String(i.quantidade).replace('.', ',')} × {i.descricao}</span>
+                  <span className="num shrink-0">{dinheiro(totalItem(i))}</span>
+                </div>
+              ))}
+            </div>
+            <div className="my-4 border-t border-dashed border-papel-300 dark:border-noite-600" />
+            <p className="text-sm text-tinta-400">{itens.length} {itens.length === 1 ? 'produto' : 'produtos'}, {String(qtdItens).replace('.', ',')} {qtdItens === 1 ? 'unidade' : 'unidades'}</p>
+            <div className="mt-2 flex items-end justify-between gap-2">
+              <span className="text-[0.95rem] font-medium">Total a pagar</span>
+              <span className="num text-[2.9rem] font-bold leading-none text-caixa-600 dark:text-caixa-300">{dinheiro(t.total)}</span>
+            </div>
           </div>
+          <div className="serrilha h-2 rotate-180" />
         </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Botao variante="secundario" disabled={!itens.length} onClick={() => setLimparAberto(true)}>Cancelar venda</Botao>
+          <Botao variante="sucesso" className="py-3 text-base" disabled={!itens.length} onClick={() => setPagamentoAberto(true)}>Finalizar venda</Botao>
+        </div>
+
         {ultima && (
-          <div className="cartao p-4 text-sm">
-            <p className="rotulo">Última venda</p>
-            <p>Nº {ultima.numero} · {dinheiro(ultima.total)}</p>
-            {Number(ultima.troco) > 0 && <p className="text-lg font-bold text-emerald-600">Troco: {dinheiro(ultima.troco)}</p>}
-            {ultima.nfce === 'emitindo' && <p className="mt-1 text-slate-500">Emitindo NFC-e…</p>}
-            {ultima.nfce === 'autorizada' && (
-              <p className="mt-1 text-emerald-600">NFC-e nº {ultima.nfceNumero} autorizada · <button className="underline" onClick={() => imprimirDanfe(ultima.venda_id)}>reimprimir</button></p>
+          <div className="cartao p-4 text-[0.95rem]">
+            <div className="flex items-baseline justify-between">
+              <span className="font-semibold">Venda nº {ultima.numero} concluída</span>
+              <span className="num">{dinheiro(ultima.total)}</span>
+            </div>
+            {Number(ultima.troco) > 0 && (
+              <p className="mt-2 flex items-baseline justify-between rounded-lg bg-caixa-50 px-3 py-2 text-caixa-700 dark:bg-caixa-700/20 dark:text-caixa-300">
+                <span>Troco a devolver</span><span className="num text-2xl font-bold">{dinheiro(ultima.troco)}</span>
+              </p>
             )}
-            {ultima.nfce === 'erro' && <p className="mt-1 text-red-600">NFC-e não emitida: {ultima.nfceErro} Reenvie pela tela Vendas.</p>}
+            {ultima.nfce === 'emitindo' && <p className="mt-2 text-tinta-400">Emitindo NFC-e…</p>}
+            {ultima.nfce === 'autorizada' && (
+              <div className="mt-2 flex items-center justify-between"><Etiqueta tom="positivo">NFC-e nº {ultima.nfceNumero} autorizada</Etiqueta>
+                <button className="flex items-center gap-1 text-sm font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => imprimirDanfe(ultima.venda_id)}><Icone nome="impressora" className="h-4 w-4" />Reimprimir</button></div>
+            )}
+            {ultima.nfce === 'erro' && <p className="mt-2 text-sm text-rubro-600">NFC-e não emitida: {ultima.nfceErro} Reenvie pela tela Vendas.</p>}
           </div>
         )}
       </aside>
 
-      <TelaSuspensa aberta={resultados.length > 0} titulo="Selecione o produto" onFechar={() => setResultados([])} largura="max-w-2xl">
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+      <TelaSuspensa aberta={resultados.length > 0} titulo="Selecione o produto" subtitulo={`${resultados.length} produtos encontrados`} onFechar={() => setResultados([])} largura="max-w-2xl">
+        <ul className="-mx-2 divide-y divide-papel-200 dark:divide-noite-700">
           {resultados.map((p) => (
             <li key={p.id}>
-              <button className="flex w-full items-center justify-between px-2 py-3 text-left hover:bg-marca-50 dark:hover:bg-slate-800" onClick={() => escolher(p)}>
-                <span>{p.descricao}<span className="block text-xs text-slate-400">{p.ean || p.codigo} · estoque {Number(p.estoque_atual)}</span></span>
-                <strong>{dinheiro(p.preco_venda)}</strong>
+              <button className="flex w-full items-center justify-between gap-4 rounded-lg px-2 py-3 text-left hover:bg-caixa-50 dark:hover:bg-noite-700" onClick={() => escolher(p)}>
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{p.descricao}</span>
+                  <span className="text-sm text-tinta-400">Código {p.ean || p.codigo || 'não informado'}, estoque {Number(p.estoque_atual)} {p.unidade}</span>
+                </span>
+                <strong className="num text-lg">{dinheiro(p.preco_venda)}</strong>
               </button>
             </li>
           ))}
@@ -173,11 +262,11 @@ export default function PDV() {
       <Confirmacao
         aberta={limparAberto}
         titulo="Cancelar venda em andamento"
-        mensagem="Todos os itens serão removidos. Deseja continuar?"
+        mensagem="Todos os itens serão removidos desta venda. Deseja continuar?"
         textoConfirmar="Cancelar venda"
         variante="perigo"
         onCancelar={() => setLimparAberto(false)}
-        onConfirmar={() => { setItens([]); setLimparAberto(false) }}
+        onConfirmar={() => { setItens([]); setDestaque(null); setLimparAberto(false) }}
       />
 
       {pagamentoAberto && (
@@ -200,7 +289,7 @@ function Pagamento({ caixa, itens, onFechar, onConcluir }) {
   const incluir = (forma) => {
     const v = valor === '' ? t.falta : lerNumero(valor)
     if (!(v > 0)) { avisar('Informe um valor válido.', 'erro'); return }
-    if (forma !== 'dinheiro' && v > t.falta) { avisar('Só o dinheiro pode gerar troco.', 'erro'); return }
+    if (forma !== 'dinheiro' && v > t.falta) { avisar('Somente o pagamento em dinheiro pode gerar troco.', 'erro'); return }
     setPagamentos((p) => [...p, { forma, valor: arred(v) }])
     setValor('')
   }
@@ -235,51 +324,54 @@ function Pagamento({ caixa, itens, onFechar, onConcluir }) {
     <TelaSuspensa
       aberta
       titulo="Pagamento"
+      subtitulo={`${itens.length} ${itens.length === 1 ? 'produto' : 'produtos'}, subtotal ${dinheiro(t.subtotal)}`}
       onFechar={onFechar}
-      largura="max-w-xl"
+      largura="max-w-2xl"
       rodape={<>
-        <Botao variante="secundario" onClick={onFechar}>Voltar</Botao>
+        <Botao variante="secundario" onClick={onFechar}>Voltar à venda</Botao>
         <Botao variante="sucesso" onClick={finalizar} disabled={!podeFinalizar} carregando={enviando}>Concluir venda</Botao>
       </>}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo rotulo="Desconto na venda (R$)"><input className="campo" inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0,00" /></Campo>
-        <Campo rotulo="CPF/CNPJ na nota (opcional)"><input className="campo" inputMode="numeric" value={cpf} onChange={(e) => setCpf(e.target.value)} /></Campo>
-      </div>
-
-      <div className="my-4 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center text-sm dark:bg-slate-800/60">
-        <div><p className="rotulo">Total</p><p className="text-lg font-bold">{dinheiro(t.total)}</p></div>
-        <div><p className="rotulo">Falta</p><p className="text-lg font-bold text-red-600">{dinheiro(t.falta)}</p></div>
-        <div><p className="rotulo">Troco</p><p className="text-lg font-bold text-emerald-600">{dinheiro(t.troco)}</p></div>
+      <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-papel-200 text-center dark:border-noite-700">
+        <div className="p-3"><p className="text-sm text-tinta-400">Total</p><p className="num text-2xl font-semibold">{dinheiro(t.total)}</p></div>
+        <div className={`border-x border-papel-200 p-3 dark:border-noite-700 ${t.falta > 0 ? 'bg-ambar-50 dark:bg-ambar-600/10' : ''}`}><p className="text-sm text-tinta-400">Falta receber</p><p className={`num text-2xl font-semibold ${t.falta > 0 ? 'text-ambar-600' : 'text-tinta-300'}`}>{dinheiro(t.falta)}</p></div>
+        <div className={`p-3 ${t.troco > 0 ? 'bg-caixa-50 dark:bg-caixa-700/20' : ''}`}><p className="text-sm text-tinta-400">Troco</p><p className={`num text-2xl font-semibold ${t.troco > 0 ? 'text-caixa-600' : 'text-tinta-300'}`}>{dinheiro(t.troco)}</p></div>
       </div>
 
       {t.falta > 0 && (
-        <>
-          <Campo rotulo="Valor recebido (vazio = valor que falta)">
-            <input className="campo" inputMode="decimal" data-valor="sim" value={valor} onChange={(e) => setValor(e.target.value)} placeholder={dinheiro(t.falta)} autoFocus />
+        <div className="mt-5">
+          <Campo rotulo="Valor recebido" ajuda="Deixe vazio para receber exatamente o valor que falta. Depois escolha a forma de pagamento.">
+            <input className="campo num text-lg" inputMode="decimal" data-valor="sim" value={valor} onChange={(e) => setValor(e.target.value)} placeholder={dinheiro(t.falta)} autoFocus />
           </Campo>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
             {FORMAS.map((f) => (
-              <Botao key={f.forma} variante="secundario" onClick={() => incluir(f.forma)}>{f.tecla} · {f.texto}</Botao>
+              <button key={f.forma} onClick={() => incluir(f.forma)} className="flex flex-col items-center gap-1.5 rounded-xl border border-papel-300 px-2 py-3 text-sm font-medium transition hover:border-caixa-500 hover:bg-caixa-50 dark:border-noite-600 dark:hover:bg-noite-700">
+                <Tecla>{f.tecla}</Tecla>{f.texto}
+              </button>
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {pagamentos.length > 0 && (
-        <ul className="mt-4 divide-y divide-slate-100 text-sm dark:divide-slate-800">
+        <ul className="mt-4 divide-y divide-papel-200 rounded-xl border border-papel-200 dark:divide-noite-700 dark:border-noite-700">
           {pagamentos.map((p, i) => (
-            <li key={i} className="flex items-center justify-between py-2">
+            <li key={i} className="flex items-center justify-between px-4 py-2.5">
               <span>{nomeForma(p.forma)}</span>
               <span className="flex items-center gap-3">
-                <strong>{dinheiro(p.valor)}</strong>
-                <button className="text-red-500" onClick={() => setPagamentos((x) => x.filter((_, j) => j !== i))} title="Remover pagamento">✕</button>
+                <strong className="num">{dinheiro(p.valor)}</strong>
+                <button className="rounded p-1 text-tinta-400 hover:text-rubro-600" onClick={() => setPagamentos((x) => x.filter((_, j) => j !== i))} aria-label="Remover pagamento"><Icone nome="fechar" className="h-4 w-4" /></button>
               </span>
             </li>
           ))}
         </ul>
       )}
-      {!t.trocoValido && <p className="mt-2 text-sm text-red-600">O troco só pode sair de pagamento em dinheiro.</p>}
+      {!t.trocoValido && <p className="mt-2 text-sm text-rubro-600">O troco só pode sair de pagamento em dinheiro.</p>}
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <Campo rotulo="Desconto na venda (R$)"><input className="campo num" inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0,00" /></Campo>
+        <Campo rotulo="CPF ou CNPJ na nota (opcional)"><input className="campo num" inputMode="numeric" value={cpf} onChange={(e) => setCpf(e.target.value)} /></Campo>
+      </div>
     </TelaSuspensa>
   )
 }

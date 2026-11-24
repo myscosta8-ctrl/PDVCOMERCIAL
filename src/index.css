@@ -2,10 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer components {
-  .cartao { @apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900; }
-  .campo  { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none
-                   focus:border-marca-500 focus:ring-2 focus:ring-marca-100
-                   dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-marca-700; }
-  .rotulo { @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400; }
+@layer base {
+  html { font-size: 15px; }
+  .num { font-family: theme('fontFamily.numero'); font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 2px solid theme('colors.caixa.500'); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 }
+
+@layer components {
+  .cartao { @apply rounded-xl border border-papel-200 bg-white dark:border-noite-700 dark:bg-noite-800; }
+  .campo  { @apply w-full rounded-lg border border-papel-300 bg-white px-3 py-2 text-[0.95rem] outline-none transition
+                   placeholder:text-tinta-300 focus:border-caixa-500 focus:ring-2 focus:ring-caixa-100
+                   dark:border-noite-600 dark:bg-noite-700 dark:focus:ring-caixa-700; }
+  .rotulo { @apply mb-1 block text-[0.8rem] font-medium text-tinta-400 dark:text-tinta-300; }
+  .titulo-secao { @apply text-base font-semibold text-tinta dark:text-papel; }
+  .tabela th { @apply px-4 py-2.5 text-[0.8rem] font-medium text-tinta-400 dark:text-tinta-300; }
+  .tabela td { @apply px-4 py-2.5; }
+  .tabela tbody tr { @apply border-t border-papel-200 dark:border-noite-700; }
+  /* Borda serrilhada de bobina de cupom */
+  .serrilha { background-image: radial-gradient(circle at 6px 0, transparent 5px, white 5.5px); background-size: 12px 8px; background-repeat: repeat-x; }
+  .dark .serrilha { background-image: radial-gradient(circle at 6px 0, transparent 5px, theme('colors.noite.800') 5.5px); }
+}
+
+/* Alinhamento padrão dos cabeçalhos sem impedir text-right nas colunas numéricas */
+:where(.tabela th) { text-align: left; }
