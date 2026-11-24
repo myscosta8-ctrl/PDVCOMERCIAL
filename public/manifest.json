@@ -1,0 +1,10 @@
+{
+  "name": "PDV Comercial",
+  "short_name": "PDV",
+  "start_url": "/PDVCOMERCIAL/",
+  "scope": "/PDVCOMERCIAL/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#1d4ed8",
+  "icons": []
+}

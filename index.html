@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1d4ed8" />
+    <link rel="manifest" href="/PDVCOMERCIAL/manifest.json" />
+    <title>PDV Comercial</title>
+    <script>
+      try { if (localStorage.getItem('tema') === 'escuro') document.documentElement.classList.add('dark') } catch (e) {}
+    </script>
+  </head>
+  <body class="bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
