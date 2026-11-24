@@ -39,12 +39,19 @@ describe('boleto', () => {
     expect(lerBoleto(codigoBanco('1500', '0000005000'), new Date(2026, 10, 24))).toMatchObject({ valor: 50, vencimento: '2026-07-07', valido: true })
   })
 
+  it('código de barras lido pela câmera vira a mesma linha digitável', () => {
+    const cb = codigoBanco()
+    expect(lerBoleto(cb).linha).toBe(linhaDoCodigoBanco(cb))
+    expect(lerBoleto(lerBoleto(cb).linha).codigoBarras).toBe(cb)
+  })
+
   it('lê a guia de concessionária de 48 dígitos', () => {
     const semDv = '858' + '00000015990' + '0123' + '4567890123456789012345678'
     const cb = semDv.slice(0, 3) + modulo11Arrecadacao(semDv) + semDv.slice(3)
     expect(cb).toHaveLength(44)
     const linha = [0, 1, 2, 3].map((k) => { const b = cb.slice(k * 11, k * 11 + 11); return b + modulo11Arrecadacao(b) }).join('')
     expect(lerBoleto(linha)).toMatchObject({ tipo: 'arrecadacao', valor: 159.9, valido: true })
+    expect(lerBoleto(cb).linha).toBe(linha)
   })
 
   it('ignora textos que não são boleto', () => {

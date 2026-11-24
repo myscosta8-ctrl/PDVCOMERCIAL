@@ -3,6 +3,7 @@ import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useSessao } from '../lib/sessao.js'
 import { dinheiro, lerNumero, arred } from '../lib/formato.js'
 import { lerBoleto, NOMES_BANCOS } from '../lib/boleto.js'
+import { LeitorBoleto } from '../components/LeitorCamera.jsx'
 import { Botao, Cabecalho, Campo, Confirmacao, Etiqueta, Icone, Indicador, Lista, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 
 const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
@@ -547,8 +548,9 @@ function FormLancamento({ form, setForm, cad, lancs, onSalvo }) {
     descricao: f.descricao || sug.descricao.replace(/ duplicata .*$/, ''),
     sugestao: sug.motivo,
   })
-  const lerLinha = (e) => {
-    const texto = e.target.value
+  const [camera, setCamera] = useState(false)
+  const lerLinha = (e) => preencherLinha(e.target.value)
+  const preencherLinha = (texto) => {
     const b = lerBoleto(texto)
     setForm((f) => {
       const base = {
@@ -627,7 +629,10 @@ function FormLancamento({ form, setForm, cad, lancs, onSalvo }) {
         {pagar && (
           <Campo rotulo="Linha digitável ou código de barras (opcional)"
             ajuda={boleto ? (boleto.valido ? `Boleto conferido${boleto.banco ? `: ${NOMES_BANCOS[boleto.banco] ?? `banco ${boleto.banco}`}` : ': concessionária ou tributo'}${boleto.valor ? `, ${dinheiro(boleto.valor)}` : ''}${boleto.vencimento ? `, vence ${dataBR(boleto.vencimento)}` : ''}` : 'Os dígitos verificadores não conferem') : 'Com leitor de código de barras, basta passar o boleto aqui.'}>
-            <input className={`campo font-mono ${boleto && !boleto.valido ? 'border-rubro-600' : ''}`} value={form.linha_digitavel} onChange={lerLinha} inputMode="numeric" placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000" />
+            <div className="flex gap-2">
+              <input className={`campo min-w-0 flex-1 font-mono ${boleto && !boleto.valido ? 'border-rubro-600' : ''}`} value={form.linha_digitavel} onChange={lerLinha} inputMode="numeric" placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000" />
+              <Botao variante="secundario" icone="camera" onClick={() => setCamera(true)} title="Ler o código de barras pela câmera">Câmera</Botao>
+            </div>
           </Campo>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -671,6 +676,7 @@ function FormLancamento({ form, setForm, cad, lancs, onSalvo }) {
           </div>
         )}
       </div>
+      <LeitorBoleto aberta={camera} onFechar={() => setCamera(false)} onLido={(b) => { setCamera(false); preencherLinha(b.linha); avisar('Boleto lido pela câmera. Confira os dados.') }} />
       <Confirmacao aberta={!!repetido} titulo="Possível lançamento repetido" textoConfirmar="Lançar mesmo assim" onCancelar={() => setRepetido(null)} onConfirmar={() => { setRepetido(null); salvar(true) }}
         mensagem={repetido ? `Já existe "${repetido.descricao}" de ${dinheiro(repetido.valor)} com vencimento em ${dataBR(repetido.vencimento)}${repetido.status === 'pago' ? ', já pago' : ''}. Lançar de novo pode duplicar a conta.` : ''} />
     </TelaSuspensa>

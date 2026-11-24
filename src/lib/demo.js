@@ -8,6 +8,7 @@ const EMP = {
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
   pix_chave: '12345678000195', pix_nome: 'Farma Familia', pix_cidade: 'Breves', balanca: { ativo: true, digitos_codigo: 5, tipo: 'preco' },
+  impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
   contador: { nome: 'Escritório Contábil Exemplo', cpf: '12345678909', crc: 'PA-012345/O' }, sped_perfil: 'A', cod_receita_icms: null,
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
 }
@@ -232,6 +233,14 @@ const RPC = {
   situacao_cliente: { limite: 500, saldo_devedor: 65.5, disponivel: 434.5, em_atraso: 0, dias_atraso: 0, vale: 30, bloqueado: false, convenio: null },
   credenciais_configuradas: { certificado: true, senha: true, csc: true },
   lotes_alerta: { vencidos: 1, vencendo: 3, lista: [] },
+  alertas_vencimento: {
+    dias: { pagar: 5, validade: 60, certificado: 30 },
+    pagar_vencidas: { qtd: 1, valor: 486.3, lista: [{ id: 'av1', descricao: 'Energia elétrica', vencimento: '2026-11-20', valor: 486.3 }] },
+    pagar_vencendo: { qtd: 2, valor: 3870, lista: [{ id: 'av2', descricao: 'Distribuidora Norte duplicata 1/3', vencimento: '2026-11-26', valor: 2370 }, { id: 'av3', descricao: 'Aluguel da loja', vencimento: '2026-11-28', valor: 1500 }] },
+    receber_atrasadas: { qtd: 2, valor: 214.5, lista: [{ id: 'av4', descricao: 'Maria das Graças (crediario 2/3)', vencimento: '2026-11-15', valor: 120 }, { id: 'av5', descricao: 'José Ribamar (crediario 1/2)', vencimento: '2026-11-18', valor: 94.5 }] },
+    lotes_vencidos: { qtd: 1, lista: [{ id: 'av6', descricao: 'Dipirona 500 mg 10 comprimidos', numero: 'DP2231', vencimento: '2026-11-10', quantidade: 6, unidade: 'CX' }] },
+    lotes_vencendo: { qtd: 3, lista: [{ id: 'av7', descricao: 'Amoxicilina 500 mg 21 cápsulas', numero: 'AM0912', vencimento: '2026-12-15', quantidade: 4, unidade: 'CX' }, { id: 'av8', descricao: 'Soro fisiológico 500 ml', numero: 'SF1188', vencimento: '2027-01-08', quantidade: 12, unidade: 'UN' }, { id: 'av9', descricao: 'Protetor solar FPS 50', numero: 'PS7720', vencimento: '2027-01-20', quantidade: 3, unidade: 'UN' }] },
+  },
   aplicar_regras_fiscais: { alterados: 3, sem_regra: 0, amostra: [
     { descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', ncm: '30049099', regra: 'Medicamentos com substituição tributária', antes: { cfop: '5102', csosn: '102' }, depois: { cfop: '5405', csosn: '500' } },
     { descricao: 'Paracetamol 750 mg, 20 comprimidos', ncm: '30049099', regra: 'Medicamentos com substituição tributária', antes: { cfop: '5102', csosn: '102' }, depois: { cfop: '5405', csosn: '500' } },

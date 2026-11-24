@@ -2,6 +2,7 @@ import QRCode from 'qrcode'
 import { NOMES_FORMAS as FORMAS } from './formas.js'
 import { supabase } from './supabase.js'
 import { dinheiro, dataHora } from './formato.js'
+import { configImpressao, imprimirHtml, paginaBobina } from './impressao.js'
 
 // Chama o servidor de NFC-e. Retorna { dados } ou { erro }.
 export async function chamarNfce(corpo) {
@@ -18,7 +19,7 @@ export async function chamarNfce(corpo) {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const chaveFormatada = (c) => String(c || '').replace(/(\d{4})/g, '$1 ').trim()
 
-// Imprime o DANFE NFC-e (bobina 80 mm) em uma janela própria
+// Imprime o DANFE NFC-e na bobina configurada (58 ou 80 mm)
 export async function imprimirDanfe(vendaId) {
   const [{ data: venda }, { data: itens }, { data: pags }, { data: doc }, { data: empresa }] = await Promise.all([
     supabase.from('vendas').select('*').eq('id', vendaId).single(),
@@ -31,15 +32,8 @@ export async function imprimirDanfe(vendaId) {
   const qr = await QRCode.toDataURL(doc.qrcode_url, { margin: 0, width: 220 })
   const e = empresa.endereco || {}
   const homolog = doc.ambiente === 2
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>NFC-e ${doc.numero}</title>
-<style>
-  @page { size: 80mm auto; margin: 3mm; }
-  body { font-family: 'Courier New', monospace; font-size: 11px; width: 74mm; margin: 0 auto; color: #000; }
-  .c { text-align: center } .b { font-weight: bold } hr { border: 0; border-top: 1px dashed #000; margin: 4px 0 }
-  table { width: 100%; border-collapse: collapse } td { vertical-align: top; padding: 1px 0 } .r { text-align: right }
-  img { display: block; margin: 4px auto; width: 40mm; height: 40mm }
-</style></head><body>
-<div class="c b">${esc(empresa.nome_fantasia || empresa.razao_social)}</div>
+  const cfg = configImpressao(empresa)
+  const corpo = `<div class="c b">${esc(empresa.nome_fantasia || empresa.razao_social)}</div>
 <div class="c">${esc(empresa.razao_social)}<br>CNPJ ${esc(empresa.cnpj)} IE ${esc(empresa.inscricao_estadual)}<br>
 ${esc(e.logradouro)}, ${esc(e.numero)} - ${esc(e.bairro)} - ${esc(e.municipio)}/${esc(empresa.uf)}</div>
 <hr><div class="c b">DANFE NFC-e - Documento Auxiliar da Nota Fiscal de Consumidor Eletrônica</div>
@@ -60,11 +54,6 @@ ${Number(venda.troco) > 0 ? `<tr><td>Troco</td><td class="r">${dinheiro(venda.tr
 <hr><div class="c b">NFC-e nº ${doc.numero} Série ${doc.serie} ${dataHora(doc.emitida_em)}</div>
 <div class="c">Protocolo de autorização: ${esc(doc.protocolo)}<br>Data de autorização: ${dataHora(doc.emitida_em)}</div>
 <img src="${qr}" alt="QR Code">
-<script>window.onload = () => { window.print(); setTimeout(() => window.close(), 500) }</script>
-</body></html>`
-  const janela = window.open('', '_blank', 'width=420,height=700')
-  if (!janela) return { erro: 'O navegador bloqueou a janela de impressão. Permita janelas para este site.' }
-  janela.document.write(html)
-  janela.document.close()
-  return {}
+${cfg.mensagem ? `<hr><div class="c">${esc(cfg.mensagem)}</div>` : ''}`
+  return imprimirHtml(paginaBobina(`NFC-e ${doc.numero}`, corpo, cfg.largura))
 }

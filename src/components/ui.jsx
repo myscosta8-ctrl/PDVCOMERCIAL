@@ -211,6 +211,8 @@ const ICONES = {
   estoque: 'M3 21V8l9-5 9 5v13M7 21v-8h10v8M7 17h10',
   impressora: 'M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z',
   grafico: 'M4 20V11M10 20V5M16 20v-6M21 20H3',
+  sino: 'M6 16V11a6 6 0 0112 0v5l2 2H4l2-2zM10 21h4',
+  camera: 'M4 7h3l2-3h6l2 3h3v13H4zM12 10a3.5 3.5 0 100 7 3.5 3.5 0 000-7z',
   lixo: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
 }
 

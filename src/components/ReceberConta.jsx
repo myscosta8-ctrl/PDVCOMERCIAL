@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
-import { dinheiro, lerNumero } from '../lib/formato.js'
+import { dinheiro, lerNumero, arred } from '../lib/formato.js'
+import { htmlComprovanteRecebimento, imprimirComEmpresa } from '../lib/impressao.js'
+import { useSessao } from '../lib/sessao.js'
 import { nomeForma } from '../lib/formas.js'
 import { Botao, Campo, TelaSuspensa, useAviso } from './ui.jsx'
 import { SeletorCliente, SituacaoCliente, carregarSituacao } from './Clientes.jsx'
@@ -10,6 +12,7 @@ const FORMAS = ['dinheiro', 'pix', 'debito', 'credito']
 // Recebimento de parcelas de crediário/convênio no caixa aberto
 export function ReceberConta({ caixa, cliente: inicial, onFechar, onConcluir }) {
   const avisar = useAviso()
+  const perfil = useSessao()
   const [cliente, setCliente] = useState(null)
   const [escolhendo, setEscolhendo] = useState(!inicial)
   const [valor, setValor] = useState('')
@@ -27,10 +30,15 @@ export function ReceberConta({ caixa, cliente: inicial, onFechar, onConcluir }) 
     const v = valor === '' ? devedor : lerNumero(valor)
     if (!(v > 0) || v > devedor) { avisar(`Informe um valor entre R$ 0,01 e ${dinheiro(devedor)}.`, 'erro'); return }
     setEnviando(true)
-    const { error } = await supabase.rpc('receber_contas', { p_caixa: caixa.id, p_cliente: cliente.id, p_valor: v, p_forma: forma })
+    const { data, error } = await supabase.rpc('receber_contas', { p_caixa: caixa.id, p_cliente: cliente.id, p_valor: v, p_forma: forma })
     setEnviando(false)
     if (error) { avisar(mensagemErro(error), 'erro'); return }
     avisar(`Recebimento de ${dinheiro(v)} registrado para ${cliente.nome}.`)
+    // Comprovante de pagamento para o cliente
+    const x = await imprimirComEmpresa((empresa, config) => htmlComprovanteRecebimento({
+      empresa, cliente, valor: v, forma, parcelas: data?.parcelas ?? [], saldo: arred(devedor - v), operador: perfil.nome, config,
+    }), { automatica: true })
+    if (x.erro) avisar(x.erro, 'erro')
     onConcluir?.()
   }
 

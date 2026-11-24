@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { chamarNfce } from '../lib/nfce.js'
 import { normalizarChave } from '../lib/pix.js'
+import { configImpressao, htmlTeste, imprimirHtml } from '../lib/impressao.js'
 import { dataHora, lerNumero } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Lista, Confirmacao, Icone, useAviso } from '../components/ui.jsx'
 
@@ -111,6 +112,30 @@ export default function Configuracoes() {
     else avisar('PIX e balança salvos.')
   }
 
+  const impressao = configImpressao(emp)
+  const mi = (c) => (v) => setEmp((x) => ({ ...x, impressao: { ...impressao, [c]: v } }))
+  const alertas = { dias_pagar: 5, dias_validade: 60, dias_certificado: 30, ...(emp.alertas || {}) }
+  const ma = (c) => (e) => setEmp((x) => ({ ...x, alertas: { ...alertas, [c]: e.target.value } }))
+  const salvarImpressaoAlertas = async () => {
+    const dias = {}
+    for (const [c, max] of [['dias_pagar', 60], ['dias_validade', 365], ['dias_certificado', 120]]) {
+      const n = parseInt(alertas[c], 10)
+      if (!(n >= 0 && n <= max)) { avisar(`Informe de 0 a ${max} dias.`, 'erro'); return }
+      dias[c] = n
+    }
+    setSalvando('impressao')
+    const { error } = await supabase.from('empresas').update({
+      impressao: { ...impressao, mensagem: String(impressao.mensagem || '').trim().slice(0, 200) }, alertas: dias,
+    }).eq('id', emp.id)
+    setSalvando('')
+    if (error) avisar(mensagemErro(error), 'erro')
+    else { avisar('Impressão e alertas salvos.'); window.dispatchEvent(new Event('alertas:recarregar')) }
+  }
+  const imprimirTeste = () => {
+    const x = imprimirHtml(htmlTeste({ ...emp, endereco: emp.endereco }, impressao))
+    if (x.erro) avisar(x.erro, 'erro')
+  }
+
   const mudarAmbiente = (v) => (v === 1 ? setConfirmarProducao(true) : setEmp((x) => ({ ...x, nfce_ambiente: 2 })))
 
   return (
@@ -164,6 +189,29 @@ export default function Configuracoes() {
           </>}
         </div>
         <div className="flex justify-end"><Botao onClick={salvarPixBalanca} carregando={salvando === 'pix'}>Salvar PIX e balança</Botao></div>
+      </section>
+
+      <section className="cartao space-y-4 p-5">
+        <h2 className="titulo-secao">Impressão e alertas</h2>
+        <p className="text-sm text-tinta-400">Cupom na impressora térmica pelo próprio navegador. Para imprimir sem a janela de confirmação, veja a ajuda ao lado do botão de teste.</p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Campo rotulo="Largura da bobina"><Lista valor={Number(impressao.largura)} opcoes={[{ valor: 80, texto: '80 mm' }, { valor: 58, texto: '58 mm' }]} onMudar={mi('largura')} /></Campo>
+          <Campo rotulo="Vias do crediário" ajuda="Com linha para o cliente assinar"><Lista valor={Number(impressao.vias_crediario)} opcoes={[1, 2, 3].map((n) => ({ valor: n, texto: n === 1 ? '1 via' : `${n} vias` }))} onMudar={mi('vias_crediario')} /></Campo>
+          <div className="sm:col-span-2"><Campo rotulo="Mensagem no fim do cupom (opcional)"><input className="campo" maxLength={200} value={impressao.mensagem ?? ''} onChange={(e) => mi('mensagem')(e.target.value)} placeholder="Ex.: Obrigado pela preferência!" /></Campo></div>
+          <label className="flex items-center gap-2 sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={!!impressao.automatica} onChange={(e) => mi('automatica')(e.target.checked)} /> Imprimir automaticamente (cupom, sangria, suprimento, fechamento e recebimento)</label>
+          <label className="flex items-center gap-2 sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" disabled={!impressao.automatica} checked={!!impressao.comprovante} onChange={(e) => mi('comprovante')(e.target.checked)} /> Imprimir comprovante não fiscal quando a NFC-e não for emitida</label>
+        </div>
+        <div className="grid gap-3 border-t border-papel-200 pt-4 sm:grid-cols-4 dark:border-noite-700">
+          <Campo rotulo="Contas a pagar: avisar com" ajuda="dias de antecedência"><input className="campo num" inputMode="numeric" value={alertas.dias_pagar} onChange={ma('dias_pagar')} /></Campo>
+          <Campo rotulo="Validade dos lotes: avisar com" ajuda="dias de antecedência"><input className="campo num" inputMode="numeric" value={alertas.dias_validade} onChange={ma('dias_validade')} /></Campo>
+          <Campo rotulo="Certificado digital: avisar com" ajuda="dias de antecedência"><input className="campo num" inputMode="numeric" value={alertas.dias_certificado} onChange={ma('dias_certificado')} /></Campo>
+          <p className="self-end pb-6 text-sm text-tinta-400">Contas a receber, crediário e lotes vencidos aparecem sempre.</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <p className="mr-auto max-w-xl text-sm text-tinta-400">Impressão direta: no atalho do Chrome do caixa, acrescente <span className="font-mono">--kiosk-printing</span> e deixe a térmica como impressora padrão.</p>
+          <Botao variante="secundario" icone="impressora" onClick={imprimirTeste}>Imprimir teste</Botao>
+          <Botao onClick={salvarImpressaoAlertas} carregando={salvando === 'impressao'}>Salvar impressão e alertas</Botao>
+        </div>
       </section>
 
       <section className="cartao space-y-4 p-5">

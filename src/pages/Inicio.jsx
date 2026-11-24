@@ -3,6 +3,7 @@ import { NOMES_FORMAS as FORMAS } from '../lib/formas.js'
 import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useSessao } from '../lib/sessao.js'
 import { dinheiro } from '../lib/formato.js'
+import { useAlertas } from '../components/Alertas.jsx'
 import { Barra, Botao, Cabecalho, Etiqueta, Icone, Indicador, Vazio, useAviso } from '../components/ui.jsx'
 
 
@@ -16,14 +17,13 @@ export default function Inicio({ irPara }) {
   const perfil = useSessao()
   const avisar = useAviso()
   const [p, setP] = useState(null)
-  const [lotes, setLotes] = useState(null)
+  const vencimentos = useAlertas()
 
   useEffect(() => {
     supabase.rpc('painel_dia').then(({ data, error }) => {
       if (error) avisar(mensagemErro(error), 'erro')
       else setP(data)
     })
-    supabase.rpc('lotes_alerta').then(({ data }) => setLotes(data))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -42,8 +42,7 @@ export default function Inicio({ irPara }) {
     p.sem_ncm > 0 && { tom: 'critico', texto: `${p.sem_ncm} produto(s) sem NCM válido: não podem sair em NFC-e.`, acao: 'Corrigir cadastro', tela: 'produtos' },
     p.nfce.pendentes > 0 && { tom: 'critico', texto: `${p.nfce.pendentes} NFC-e pendente(s) ou rejeitada(s).`, acao: 'Ver vendas', tela: 'vendas' },
     !perfil.empresa.certificado_titular && perfil.papel === 'administrador' && { tom: 'alerta', texto: 'NFC-e ainda não configurada.', acao: 'Configurar', tela: 'configuracoes' },
-    lotes?.vencidos > 0 && { tom: 'critico', texto: `${lotes.vencidos} lote(s) vencido(s) ainda com saldo em estoque: retire da área de venda e registre a perda.`, acao: 'Ver produtos', tela: 'produtos' },
-    lotes?.vencendo > 0 && { tom: 'alerta', texto: `${lotes.vencendo} lote(s) vencem nos próximos 30 dias.`, acao: 'Ver produtos', tela: 'produtos' },
+    ...(vencimentos ?? []).map((g) => ({ tom: g.nivel, texto: `${g.titulo}${g.valor ? ` (${dinheiro(g.valor)})` : ''}${g.id === 'lotes_vencidos' ? ': retire da área de venda e registre a perda' : ''}.`, acao: g.acao, tela: g.tela })),
     p.produtos_ativos === 0 && { tom: 'alerta', texto: 'Nenhum produto cadastrado ainda.', acao: 'Cadastrar produtos', tela: 'produtos' },
   ].filter(Boolean)
 

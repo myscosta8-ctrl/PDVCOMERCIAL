@@ -13,6 +13,7 @@ import { JanelaReceita } from '../components/Receita.jsx'
 import { lerEtiquetaBalanca, quantidadeDaEtiqueta } from '../lib/balanca.js'
 import { gerarPix } from '../lib/pix.js'
 import QRCode from 'qrcode'
+import { configImpressao, imprimirComprovanteVenda } from '../lib/impressao.js'
 
 const FORMAS = [
   { forma: 'dinheiro', texto: 'Dinheiro', tecla: '1' },
@@ -44,7 +45,7 @@ function useConfigCaixa() {
   const [cfg, setCfg] = useState({})
   useEffect(() => {
     supabase.from('empresas').select('*').single().then(({ data }) => data && setCfg({
-      balanca: data.balanca, uf: data.uf,
+      balanca: data.balanca, uf: data.uf, impressao: configImpressao(data),
       pix: data.pix_chave ? { chave: data.pix_chave, nome: data.pix_nome || data.nome_fantasia || data.razao_social, cidade: data.pix_cidade || data.endereco?.municipio } : null,
     }))
   }, [])
@@ -201,19 +202,38 @@ export default function PDV() {
     }
     avisar(`Venda nº ${r.numero} concluída.`)
     busca.current?.focus()
+    const imp = cfg.impressao ?? configImpressao(null)
+    const comprovante = async () => {
+      const x = await imprimirComprovanteVenda(r.venda_id)
+      if (x.erro) avisar(x.erro, 'erro')
+    }
+    // Crediário: o comprovante sai sempre que a impressão automática está ligada, para o cliente assinar
+    const crediario = imp.automatica && (await supabase.from('contas_receber').select('id').eq('venda_id', r.venda_id).eq('origem', 'crediario').limit(1)).data?.length > 0
     // Emite a NFC-e automaticamente quando a configuração fiscal já foi testada
     const { data: emp } = await supabase.from('empresas').select('certificado_titular, nfce_csc_id').single()
-    if (!emp?.certificado_titular || !emp?.nfce_csc_id) return
+    if (!emp?.certificado_titular || !emp?.nfce_csc_id) {
+      if (crediario || (imp.automatica && imp.comprovante)) await comprovante()
+      return
+    }
     setUltima((u) => ({ ...u, nfce: 'emitindo' }))
     const n = await chamarNfce({ acao: 'emitir', venda_id: r.venda_id })
     if (n.erro) {
       setUltima((u) => ({ ...u, nfce: 'erro', nfceErro: n.erro }))
       avisar(n.erro, 'erro')
+      if (crediario || (imp.automatica && imp.comprovante)) await comprovante()
       return
     }
     setUltima((u) => ({ ...u, nfce: 'autorizada', nfceNumero: n.dados.numero }))
-    const imp = await imprimirDanfe(r.venda_id)
-    if (imp.erro) avisar(imp.erro, 'erro')
+    if (imp.automatica) {
+      const x = await imprimirDanfe(r.venda_id)
+      if (x.erro) avisar(x.erro, 'erro')
+    }
+    if (crediario) await comprovante()
+  }
+
+  const reimprimir = async () => {
+    const x = ultima.nfce === 'autorizada' ? await imprimirDanfe(ultima.venda_id) : await imprimirComprovanteVenda(ultima.venda_id)
+    if (x.erro) avisar(x.erro, 'erro')
   }
 
   return (
@@ -373,11 +393,13 @@ export default function PDV() {
               </p>
             )}
             {ultima.nfce === 'emitindo' && <p className="mt-2 text-tinta-400">Emitindo NFC-e…</p>}
-            {ultima.nfce === 'autorizada' && (
-              <div className="mt-2 flex items-center justify-between"><Etiqueta tom="positivo">NFC-e nº {ultima.nfceNumero} autorizada</Etiqueta>
-                <button className="flex items-center gap-1 text-sm font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => imprimirDanfe(ultima.venda_id)}><Icone nome="impressora" className="h-4 w-4" />Reimprimir</button></div>
-            )}
             {ultima.nfce === 'erro' && <p className="mt-2 text-sm text-rubro-600">NFC-e não emitida: {ultima.nfceErro} Reenvie pela tela Vendas.</p>}
+            {ultima.nfce !== 'emitindo' && (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                {ultima.nfce === 'autorizada' ? <Etiqueta tom="positivo">NFC-e nº {ultima.nfceNumero} autorizada</Etiqueta> : <span className="text-sm text-tinta-400">Comprovante não fiscal</span>}
+                <button className="flex items-center gap-1 text-sm font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={reimprimir}><Icone nome="impressora" className="h-4 w-4" />{ultima.nfce === 'autorizada' ? 'Reimprimir DANFE' : 'Imprimir comprovante'}</button>
+              </div>
+            )}
           </div>
         )}
       </aside>

@@ -61,6 +61,12 @@ export function linhaDoCodigoBanco(cb) {
   return c1 + modulo10(c1) + c2 + modulo10(c2) + c3 + modulo10(c3) + cb[4] + cb.slice(5, 19)
 }
 
+// Linha digitável de concessionária/tributo: 4 blocos de 11 dígitos, cada um com seu dígito
+export function linhaDoCodigoArrecadacao(cb) {
+  const mod = cb[2] === '6' || cb[2] === '7' ? modulo10 : modulo11Arrecadacao
+  return [0, 1, 2, 3].map((k) => { const b = cb.slice(k * 11, k * 11 + 11); return b + mod(b) }).join('')
+}
+
 function lerBancario(cb, hoje) {
   const dvOk = modulo11Banco(cb.slice(0, 4) + cb.slice(5)) === Number(cb[4])
   const fator = cb.slice(5, 9)
@@ -68,6 +74,7 @@ function lerBancario(cb, hoje) {
     tipo: 'bancario',
     banco: cb.slice(0, 3),
     codigoBarras: cb,
+    linha: linhaDoCodigoBanco(cb),
     valor: Number(cb.slice(9, 19)) / 100,
     vencimento: dataDoFator(fator, hoje),
     valido: dvOk,
@@ -80,7 +87,7 @@ function lerArrecadacao(cb) {
   const valido = mod(cb.slice(0, 3) + cb.slice(4)) === Number(cb[3])
   // Posição 3 = 6 ou 8: valor efetivo em reais; 7 ou 9: valor de referência (não é dinheiro)
   const temValor = ref === '6' || ref === '8'
-  return { tipo: 'arrecadacao', banco: null, codigoBarras: cb, valor: temValor ? Number(cb.slice(4, 15)) / 100 : null, vencimento: null, valido }
+  return { tipo: 'arrecadacao', banco: null, codigoBarras: cb, linha: linhaDoCodigoArrecadacao(cb), valor: temValor ? Number(cb.slice(4, 15)) / 100 : null, vencimento: null, valido }
 }
 
 // Aceita a linha com pontos e espaços. Retorna null se não tiver 44, 47 ou 48 dígitos.

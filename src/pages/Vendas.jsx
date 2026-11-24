@@ -4,6 +4,7 @@ import { supabase, mensagemErro } from '../lib/supabase.js'
 import { dinheiro, dataHora } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Etiqueta, Icone, Indicador, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 import { chamarNfce, imprimirDanfe } from '../lib/nfce.js'
+import { imprimirComprovanteVenda } from '../lib/impressao.js'
 import { useSessao } from '../lib/sessao.js'
 import { useCaixaAberto } from '../lib/caixa.js'
 import { lerNumero } from '../lib/formato.js'
@@ -131,6 +132,7 @@ export default function Vendas() {
         largura="max-w-2xl"
         rodape={<>
           <Botao variante="secundario" onClick={() => setDetalhe(null)}>Fechar</Botao>
+          <Botao variante="secundario" icone="impressora" onClick={async () => { const x = await imprimirComprovanteVenda(detalhe.id); if (x.erro) avisar(x.erro, 'erro') }}>Comprovante</Botao>
           {detalhe?.status === 'concluida' && perfil.papel !== 'operador' && detalhe.itens.some((i) => Number(i.quantidade) > Number(i.quantidade_devolvida)) && <Botao variante="secundario" onClick={() => setDevolvendo(detalhe)}>Devolução ou troca</Botao>}
           {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao variante="perigo" onClick={() => setCancelando(detalhe)}>Cancelar venda</Botao>}
           {detalhe?.status === 'concluida' && detalhe?.nfce?.status !== 'autorizada' && <Botao icone="nota" onClick={emitir} carregando={emitindo}>{detalhe?.nfce ? 'Reenviar NFC-e' : 'Emitir NFC-e'}</Botao>}

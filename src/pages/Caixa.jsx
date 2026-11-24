@@ -4,6 +4,8 @@ import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useCaixaAberto, terminalAtual, definirTerminal } from '../lib/caixa.js'
 import { dinheiro, lerNumero, dataHora, arred } from '../lib/formato.js'
 import { ReceberConta } from '../components/ReceberConta.jsx'
+import { configImpressao, htmlMovimentoCaixa, imprimirComEmpresa, imprimirFechamento } from '../lib/impressao.js'
+import { useSessao } from '../lib/sessao.js'
 import { Barra, Botao, Cabecalho, Campo, Etiqueta, Icone, Indicador, TelaSuspensa, Vazio, useAviso } from '../components/ui.jsx'
 
 const TITULOS = { abrir: 'Abertura de caixa', sangria: 'Sangria', suprimento: 'Suprimento', fechar: 'Fechamento de caixa' }
@@ -16,6 +18,7 @@ const DESCRICOES = {
 
 export default function Caixa() {
   const { caixa, recarregar } = useCaixaAberto()
+  const perfil = useSessao()
   const avisar = useAviso()
   const [resumo, setResumo] = useState(null)
   const [movimentos, setMovimentos] = useState([])
@@ -40,6 +43,11 @@ export default function Caixa() {
   }
   useEffect(() => { carregar() }, [caixa]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const reimprimir = async (id) => {
+    const x = await imprimirFechamento(id)
+    if (x.erro) avisar(x.erro, 'erro')
+  }
+
   const abrirJanela = (j) => { setValor(''); setMotivo(''); setJanela(j) }
   const fechar = () => setJanela(null)
 
@@ -57,13 +65,20 @@ export default function Caixa() {
       r = await supabase.rpc('abrir_caixa', { p_terminal: n, p_valor: v })
     } else if (janela === 'fechar') {
       r = await supabase.rpc('fechar_caixa', { p_caixa: caixa.id, p_valor_informado: v })
-      if (!r.error) setFechamento({ ...r.data, informado: v })
+      if (!r.error) setFechamento({ ...r.data, informado: v, caixa_id: caixa.id })
     } else {
       r = await supabase.rpc('movimentar_caixa', { p_caixa: caixa.id, p_tipo: janela, p_valor: v, p_motivo: motivo || null })
     }
     setEnviando(false)
     if (r.error) { avisar(mensagemErro(r.error), 'erro'); return }
     avisar({ abrir: 'Caixa aberto.', fechar: 'Caixa fechado.', sangria: 'Sangria registrada.', suprimento: 'Suprimento registrado.' }[janela])
+    // Comprovante automático de sangria, suprimento e fechamento
+    const { data: emp } = janela === 'abrir' ? { data: null } : await supabase.from('empresas').select('impressao').single()
+    if (emp && configImpressao(emp).automatica) {
+      const x = janela === 'fechar' ? await imprimirFechamento(caixa.id)
+        : await imprimirComEmpresa((emp, config) => htmlMovimentoCaixa({ empresa: emp, tipo: janela, valor: v, motivo, terminal: caixa.numero_terminal, operador: perfil.nome, config }))
+      if (x.erro) avisar(x.erro, 'erro')
+    }
     setJanela(null)
     await recarregar()
     carregar()
@@ -96,6 +111,7 @@ export default function Caixa() {
             <p className="text-sm">Esperado {dinheiro(fechamento.dinheiro_esperado)}, contado {dinheiro(fechamento.informado)}</p>
           </div>
           <div className="num text-right"><p className="font-sans text-sm">Diferença</p><p className="text-2xl font-semibold">{dinheiro(arred(fechamento.informado - fechamento.dinheiro_esperado))}</p></div>
+          <Botao variante="secundario" icone="impressora" onClick={() => reimprimir(fechamento.caixa_id)}>Imprimir</Botao>
         </div>
       )}
 
@@ -149,7 +165,7 @@ export default function Caixa() {
         {historico.length === 0 ? <Vazio icone="relogio" titulo="Nenhum fechamento registrado" texto="O histórico de caixas fechados aparece aqui, com a diferença apurada." /> : (
           <div className="overflow-x-auto">
             <table className="tabela mt-2 w-full text-[0.95rem]">
-              <thead><tr><th>Terminal</th><th>Abertura</th><th>Fechamento</th><th className="text-right">Esperado</th><th className="text-right">Contado</th><th className="text-right">Diferença</th></tr></thead>
+              <thead><tr><th>Terminal</th><th>Abertura</th><th>Fechamento</th><th className="text-right">Esperado</th><th className="text-right">Contado</th><th className="text-right">Diferença</th><th /></tr></thead>
               <tbody>
                 {historico.map((c) => {
                   const dif = arred(Number(c.valor_informado) - Number(c.valor_esperado))
@@ -161,6 +177,7 @@ export default function Caixa() {
                       <td className="num text-right">{dinheiro(c.valor_esperado)}</td>
                       <td className="num text-right">{dinheiro(c.valor_informado)}</td>
                       <td className="text-right">{dif === 0 ? <Etiqueta tom="positivo">Sem diferença</Etiqueta> : <Etiqueta tom={dif < 0 ? 'critico' : 'alerta'}>{dif > 0 ? 'Sobra' : 'Falta'} {dinheiro(Math.abs(dif))}</Etiqueta>}</td>
+                      <td className="text-right"><button className="rounded-lg p-1.5 text-tinta-400 hover:bg-papel-100 hover:text-caixa-600 dark:hover:bg-noite-700" title="Imprimir fechamento" aria-label="Imprimir fechamento" onClick={() => reimprimir(c.id)}><Icone nome="impressora" className="h-4 w-4" /></button></td>
                     </tr>
                   )
                 })}
