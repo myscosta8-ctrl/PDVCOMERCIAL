@@ -20,7 +20,7 @@ export const LISTAS_CONTROLE = [
 const VAZIO = {
   descricao: '', codigo: '', ean: '', unidade: 'UN', preco_venda: '', preco_custo: '', estoque_minimo: '',
   categoria_id: null, ncm: '', cest: '', cfop: '5102', origem: 0, csosn: '102', cst_icms: '', controla_lote: false,
-  registro_ms: '', controlado: false, lista_controle: null, codigo_balanca: '', ativo: true, markup: '', e_kit: false, componentes: [],
+  registro_ms: '', controlado: false, lista_controle: null, codigo_balanca: '', ativo: true, markup: '', e_kit: false, componentes: [], cozinha: false,
 }
 const UNIDADES = ['UN', 'CX', 'FR', 'CP', 'KG', 'G', 'L', 'ML', 'M', 'PCT', 'PAR'].map((u) => ({ valor: u, texto: u }))
 const ORIGENS = [
@@ -47,6 +47,7 @@ export default function Produtos() {
   const avisar = useAviso()
   const pode = perfil.papel !== 'operador'
   const farmacia = perfil.empresa.segmento === 'farmacia'
+  const restaurante = perfil.empresa.segmento === 'restaurante'
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('todos')
   const [lista, setLista] = useState(null)
@@ -357,6 +358,7 @@ export default function Produtos() {
               </fieldset>
             )}
 
+            {restaurante && <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={!!edicao.cozinha} onChange={m('cozinha')} /> Preparado na cozinha (aparece na tela da cozinha quando lançado na comanda)</label>}
             <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={edicao.ativo} onChange={m('ativo')} /> Produto ativo para venda</label>
           </div>
         )}

@@ -218,3 +218,27 @@ export async function imprimirComEmpresa(montar, { automatica = false } = {}) {
   if (automatica && !config.automatica) return {}
   return imprimirHtml(montar(empresa, config))
 }
+
+// Pré-conta da comanda (não fiscal), com a divisão por pessoa
+export function htmlPreConta({ empresa, comanda, itens, config }) {
+  const cfg = { ...IMPRESSAO_PADRAO, ...(config || {}) }
+  const validos = itens.filter((i) => i.status !== 'cancelado')
+  const total = validos.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0)
+  const pessoas = Math.max(1, Number(comanda.pessoas) || 1)
+  const corpo = `${cabecalhoEmpresa(empresa)}<hr><div class="c b g">CONFERÊNCIA DE CONTA</div>
+<div class="c">${comanda.mesa ? `Mesa ${esc(comanda.mesa)} - ` : ''}Comanda nº ${esc(comanda.numero)}${comanda.identificacao ? `<br>${esc(comanda.identificacao)}` : ''}<br>${esc(dataHora(new Date().toISOString()))}</div><hr>
+${linhas(validos.map((i) => [`${esc(Number(i.quantidade).toLocaleString('pt-BR'))} x ${esc(i.descricao)}`, dinheiro(Number(i.quantidade) * Number(i.preco_unitario))]))}<hr>
+${linhas([['TOTAL', dinheiro(total), 'b g'], pessoas > 1 && [`Por pessoa (${pessoas})`, dinheiro(total / pessoas)]])}
+<hr><div class="c">NÃO É DOCUMENTO FISCAL</div>${cfg.mensagem ? `<div class="c">${esc(cfg.mensagem)}</div>` : ''}`
+  return paginaBobina('Conferência de conta', corpo, cfg.largura)
+}
+
+// Pedido para a cozinha: só os itens enviados agora, com a observação de cada um
+export function htmlPedidoCozinha({ comanda, itens, garcom, config }) {
+  const cfg = { ...IMPRESSAO_PADRAO, ...(config || {}) }
+  const corpo = `<div class="c b g">PEDIDO - COZINHA</div>
+<div class="c b g">${comanda.mesa ? `MESA ${esc(comanda.mesa)}` : esc(comanda.identificacao || `COMANDA ${comanda.numero}`)}</div>
+<div class="c">Comanda nº ${esc(comanda.numero)}${garcom ? ` - ${esc(garcom)}` : ''}<br>${esc(dataHora(new Date().toISOString()))}</div><hr>
+${itens.map((i) => `<div class="b g">${esc(Number(i.quantidade).toLocaleString('pt-BR'))} x ${esc(i.descricao)}</div>${i.observacao ? `<div>&gt;&gt; ${esc(i.observacao)}</div>` : ''}`).join('<hr>')}`
+  return paginaBobina('Pedido cozinha', corpo, cfg.largura)
+}

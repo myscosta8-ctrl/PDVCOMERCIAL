@@ -4,7 +4,7 @@ import { textoPorRegras } from '../../supabase/functions/resumo/resumo.ts'
 const agora = new Date()
 const h = (horas, min = 0) => { const d = new Date(agora); d.setHours(horas, min, 0, 0); return d.toISOString() }
 const EMP = {
-  id: 'e1', razao_social: 'Farma Família Ltda', nome_fantasia: 'Farma Família', segmento: 'farmacia', cnpj: '12345678000195',
+  id: 'e1', razao_social: 'Farma Família Ltda', nome_fantasia: 'Farma Família', segmento: (() => { try { return localStorage.getItem('demo:segmento') || 'farmacia' } catch { return 'farmacia' } })(), cnpj: '12345678000195',
   inscricao_estadual: '151234567', uf: 'PA', municipio_ibge: '1501808', regime_tributario: 'simples', nfce_ambiente: 2, nfce_serie: 1,
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
@@ -118,7 +118,29 @@ const dreDemo = () => ({
     ['4.05', 'Contabilidade', 650], ['4.06', 'Sistemas e assinaturas', 149.9], ['4.10', 'Taxas de cartão e tarifas bancárias', 540 + ((i * 311) % 900) - 149.9],
   ].map(([codigo, nome, valor]) => ({ mes: i + 1, grupo: 'despesas_operacionais', codigo, nome, valor }))).flat(),
 })
+const MESAS = Array.from({ length: 12 }, (_, i) => ({ id: `m${i + 1}`, numero: i + 1, lugares: i < 8 ? 4 : 6, nome: i < 8 ? 'Salão' : 'Varanda', ativo: true }))
+const min = (n) => new Date(Date.now() - n * 60000).toISOString()
+const COMANDAS = [
+  { id: 'c1', numero: 214, mesa_id: 'm2', identificacao: null, pessoas: 4, status: 'aberta', aberta_em: min(52) },
+  { id: 'c2', numero: 216, mesa_id: 'm3', identificacao: 'Aniversário Júlia', pessoas: 6, status: 'aberta', aberta_em: min(31) },
+  { id: 'c3', numero: 219, mesa_id: 'm5', identificacao: null, pessoas: 2, status: 'aberta', aberta_em: min(12) },
+  { id: 'c4', numero: 220, mesa_id: 'm9', identificacao: null, pessoas: 5, status: 'aberta', aberta_em: min(7) },
+  { id: 'c5', numero: 221, mesa_id: null, identificacao: 'Balcão: Seu Raimundo', pessoas: 1, status: 'aberta', aberta_em: min(4) },
+]
+const CI = (id, comanda_id, descricao, quantidade, preco_unitario, cozinha, status, lancado, observacao = null) =>
+  ({ id, comanda_id, produto_id: `pr-${descricao}`, descricao, quantidade, preco_unitario, cozinha, status, lancado_em: min(lancado), observacao, motivo: status === 'cancelado' ? 'Lançado em duplicidade' : null,
+     comanda: (() => { const c = COMANDAS.find((x) => x.id === comanda_id); const m = MESAS.find((x) => x.id === c.mesa_id); return { id: c.id, numero: c.numero, identificacao: c.identificacao, status: 'aberta', mesa: m ? { numero: m.numero } : null } })() })
+const COMANDA_ITENS = [
+  CI('i1', 'c1', 'Picanha na chapa (2 pessoas)', 2, 98, true, 'entregue', 48), CI('i2', 'c1', 'Refrigerante lata', 4, 6.5, false, 'entregue', 48),
+  CI('i3', 'c1', 'Pudim de leite', 2, 12, true, 'pronto', 6), CI('i4', 'c1', 'Suco de cupuaçu 500 ml', 1, 9, false, 'cancelado', 40),
+  CI('i5', 'c2', 'Filhote assado com açaí', 2, 89, true, 'pendente', 18, 'Um sem pimenta'), CI('i6', 'c2', 'Porção de batata frita', 2, 32, true, 'pronto', 18),
+  CI('i7', 'c2', 'Cerveja long neck', 6, 11, false, 'entregue', 30), CI('i8', 'c3', 'Prato feito do dia', 2, 25, true, 'pendente', 11, 'Bem passado'),
+  CI('i9', 'c3', 'Suco de cupuaçu 500 ml', 2, 9, false, 'entregue', 11), CI('i10', 'c4', 'Tacacá', 5, 22, true, 'pendente', 6),
+  CI('i11', 'c4', 'Água mineral', 3, 4, false, 'entregue', 6), CI('i12', 'c5', 'X-salada', 1, 18, true, 'pendente', 3, 'Sem cebola'),
+]
+
 const TABELAS = {
+  mesas: MESAS, comandas: COMANDAS, comanda_itens: COMANDA_ITENS,
   usuarios: [{ id: 'u1', nome: 'Carlos Lima', papel: 'administrador', empresa: EMP }],
   empresas: [EMP],
   produtos: PRODUTOS,

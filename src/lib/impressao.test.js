@@ -38,3 +38,23 @@ describe('impressão em bobina', () => {
     expect(h).toContain('PIX')
   })
 })
+
+import { htmlPreConta, htmlPedidoCozinha } from './impressao.js'
+describe('comandas', () => {
+  const itens = [{ descricao: 'Prato feito', quantidade: 2, preco_unitario: 25, status: 'entregue', observacao: 'sem cebola' },
+    { descricao: 'Suco', quantidade: 1, preco_unitario: 8, status: 'cancelado' }, { descricao: 'Refrigerante', quantidade: 3, preco_unitario: 6, status: 'pendente' }]
+  it('pré-conta soma só os itens válidos e divide por pessoa', () => {
+    const h = htmlPreConta({ empresa: { razao_social: 'Bar' }, comanda: { numero: 7, mesa: 4, pessoas: 2 }, itens })
+    expect(h).toContain('Mesa 4 - Comanda nº 7')
+    expect(h).not.toContain('Suco')
+    expect(h).toMatch(/TOTAL<\/td><td class="r">R\$\s68,00/)
+    expect(h).toMatch(/Por pessoa \(2\)<\/td><td class="r">R\$\s34,00/)
+    expect(h).toContain('NÃO É DOCUMENTO FISCAL')
+  })
+  it('pedido da cozinha traz a mesa e a observação', () => {
+    const h = htmlPedidoCozinha({ comanda: { numero: 7, mesa: 4 }, itens: [itens[0]], garcom: 'Ana' })
+    expect(h).toContain('MESA 4')
+    expect(h).toContain('&gt;&gt; sem cebola')
+    expect(h).toContain('Comanda nº 7 - Ana')
+  })
+})

@@ -47,6 +47,7 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Grupo J — Resumo do mês na tela Início: escrito por IA quando a chave estiver configurada no servidor, ou montado pelas regras do sistema
 - [x] Painel do revendedor — cadastro de empresas clientes com convite do administrador, plano e mensalidade, geração e baixa das mensalidades, suspensão e reativação do acesso (dados preservados), uso de cada loja nos últimos 30 dias; primeiro acesso e troca de senha na tela de entrada
 - [x] Relatórios de vendas — período com comparação ao anterior, faturamento por dia, mapa de movimento por dia da semana e hora, curva ABC com margem, categorias, operadores, formas de pagamento, clientes e produtos sem venda; exportação em planilha
+- [x] Restaurante — mesas e comandas (abrir mesa, comanda sem mesa, lançar pedidos com observação, trocar de mesa, juntar comandas, conferência de conta com divisão por pessoa, fechamento da conta pela venda normal com NFC-e), tela da cozinha com tempo de espera e pedido impresso para a cozinha
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

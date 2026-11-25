@@ -218,6 +218,7 @@ const ICONES = {
   camera: 'M4 7h3l2-3h6l2 3h3v13H4zM12 10a3.5 3.5 0 100 7 3.5 3.5 0 000-7z',
   lixo: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
   copiar: 'M9 9h11v11H9zM5 15H4V4h11v1',
+  mesa: 'M3 9h18M5 9v10M19 9v10M8 9V6h8v3M5 15h14',
   cartao: 'M3 6h18v12H3zM3 10h18M7 15h4',
 }
 
