@@ -30,4 +30,11 @@ describe('NFC-e: tributação pela regra', () => {
     expect(infNFe).toContain('<PISNT><CST>04</CST></PISNT>')
     expect(valor(infNFe.slice(infNFe.indexOf('<ICMSTot>')), 'vICMS')).toBe('0.00')
   })
+  it('cartão da maquininha leva credenciadora, bandeira e autorização', () => {
+    const d = base(1, { csosn: '102' })
+    d.pagamentos = [{ forma: 'credito', valor: 60, bandeira: '02', autorizacao: 'A1-B2', credenciadora_cnpj: '01.027.058/0001-91' }, { forma: 'debito', valor: 30 }]
+    const { infNFe } = montarInfNFe(d)
+    expect(infNFe).toContain('<detPag><tPag>03</tPag><vPag>60.00</vPag><card><tpIntegra>2</tpIntegra><CNPJ>01027058000191</CNPJ><tBand>02</tBand><cAut>A1B2</cAut></card></detPag>')
+    expect(infNFe).toContain('<detPag><tPag>04</tPag><vPag>30.00</vPag><card><tpIntegra>2</tpIntegra></card></detPag>')
+  })
 })

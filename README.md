@@ -43,6 +43,8 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Grupo G (parte 1) — DIFAL na NF-e (grupo ICMSUFDest para regime normal, tabela de ICMS por UF ajustável, base única ou dupla; Simples Nacional e MEI saem sem DIFAL) e notas emitidas contra o CNPJ: busca na SEFAZ (distribuição de documentos), manifestação do destinatário (ciência, confirmação, desconhecimento, operação não realizada) e lançamento da entrada direto pela nota baixada
 - [x] IBS e CBS (reforma tributária) na NF-e e na NFC-e para regime normal e Simples com excesso de sublimite: grupo IBSCBS por item e IBSCBSTot, alíquotas de 2026 (CBS 0,9%, IBS UF 0,1%), base sem ICMS/PIS/COFINS/DIFAL, CST 000/200/400/410 com redução de alíquota pelas regras fiscais; alíquotas dos anos seguintes cadastráveis por ano
 - [x] MDF-e (modelo 58) para carga própria em veículo da empresa: emissão a partir das NF-e autorizadas, consulta, encerramento da viagem e cancelamento; IBS e CBS no DANFE impresso
+- [x] Grupo I — PIX dinâmico pela API Pix do banco (cobrança por venda, confirmação automática, cancelamento, credenciais no cofre) e dados do cartão da maquininha (bandeira, autorização, NSU e credenciadora) na NFC-e
+- [x] Grupo J — Resumo do mês na tela Início: escrito por IA quando a chave estiver configurada no servidor, ou montado pelas regras do sistema
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

@@ -4,6 +4,7 @@ import { supabase, mensagemErro } from '../lib/supabase.js'
 import { useSessao } from '../lib/sessao.js'
 import { dinheiro } from '../lib/formato.js'
 import { useAlertas } from '../components/Alertas.jsx'
+import { ResumoMes } from '../components/ResumoMes.jsx'
 import { Barra, Botao, Cabecalho, Etiqueta, Icone, Indicador, Vazio, useAviso } from '../components/ui.jsx'
 
 
@@ -70,6 +71,8 @@ export default function Inicio({ irPara }) {
           ))}
         </div>
       )}
+
+      {['administrador', 'gerente'].includes(perfil.papel) && <ResumoMes />}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <section className="cartao p-5">

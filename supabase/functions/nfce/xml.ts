@@ -27,7 +27,7 @@ export interface ItemNota {
   frete?: number; xPed?: string | null;
   cst_ibscbs?: string | null; cclasstrib?: string | null; reducao_ibscbs?: number | null;
 }
-export interface PagamentoNota { forma: string; valor: number }
+export interface PagamentoNota { forma: string; valor: number; bandeira?: string | null; autorizacao?: string | null; credenciadora_cnpj?: string | null }
 export interface DadosNota {
   emitente: Emitente; ambiente: 1 | 2; serie: number; numero: number; codigo_numerico: string;
   emissao: Date; itens: ItemNota[]; pagamentos: PagamentoNota[]; troco: number;
@@ -107,6 +107,14 @@ export function montarChave(d: DadosNota, tpEmis = 1) {
   return { chave: base + dv, dv, cUF };
 }
 
+// Cartão na maquininha (pagamento não integrado, tpIntegra 2): credenciadora, bandeira e autorização quando informados
+export function grupoCartao(p: PagamentoNota) {
+  const cnpj = so(p.credenciadora_cnpj);
+  const band = /^(0[1-9]|1[0-9]|2[0-7]|99)$/.test(String(p.bandeira ?? "")) ? String(p.bandeira) : "";
+  const aut = txt(p.autorizacao ?? "", 20).replace(/[^A-Za-z0-9]/g, "");
+  return tag("card", tag("tpIntegra", "2") + (cnpj.length === 14 ? tag("CNPJ", cnpj) : "") + (band ? tag("tBand", band) : "") + (aut ? tag("cAut", aut) : ""));
+}
+
 // Código do meio de pagamento (tabela tPag)
 export const T_PAG: Record<string, string> = { dinheiro: "01", credito: "03", debito: "04", crediario: "05", pix: "17", outro: "99" };
 
@@ -163,7 +171,7 @@ export function montarInfNFe(d: DadosNota) {
     const t = T_PAG[p.forma] ?? "99";
     return tag("detPag",
       tag("tPag", t) + (t === "99" ? tag("xPag", "Outros") : "") + tag("vPag", n2(p.valor)) +
-      (t === "03" || t === "04" ? tag("card", tag("tpIntegra", "2")) : ""));
+      (t === "03" || t === "04" ? grupoCartao(p) : ""));
   }).join("") + (d.troco > 0 ? tag("vTroco", n2(d.troco)) : ""));
 
   const infAdic = d.informacoes ? tag("infAdic", tag("infCpl", txt(d.informacoes, 2000))) : "";

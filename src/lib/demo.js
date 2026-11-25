@@ -1,3 +1,4 @@
+import { textoPorRegras } from '../../supabase/functions/resumo/resumo.ts'
 // Cliente falso, com dados fictícios, usado apenas para conferir as telas (VITE_DEMO=1).
 // Nunca é incluído quando o sistema roda com o banco real.
 const agora = new Date()
@@ -7,7 +8,7 @@ const EMP = {
   inscricao_estadual: '151234567', uf: 'PA', municipio_ibge: '1501808', regime_tributario: 'simples', nfce_ambiente: 2, nfce_serie: 1,
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
-  pix_chave: '12345678000195', pix_nome: 'Farma Familia', pix_cidade: 'Breves', balanca: { ativo: true, digitos_codigo: 5, tipo: 'preco' },
+  pix_chave: '12345678000195', pix_nome: 'Farma Familia', pix_cidade: 'Breves', pix_dinamico: { url_api: 'https://api.banco.exemplo.com.br/pix/v2', url_token: 'https://api.banco.exemplo.com.br/oauth/token', chave: '12345678000195', expiracao: 600 }, cartao_pedir_dados: true, cartao_credenciadora_cnpj: '01027058000191', balanca: { ativo: true, digitos_codigo: 5, tipo: 'preco' },
   nfe_serie: 1, mdfe_serie: 1, aliquotas_uf: {}, dfe_consultado_em: '2026-11-24T13:02:00Z', dfe_liberado_em: null, dfe_ult_nsu: '000000000000231', impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
   contador: { nome: 'Escritório Contábil Exemplo', cpf: '12345678909', crc: 'PA-012345/O' }, sped_perfil: 'A', cod_receita_icms: null,
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
@@ -309,6 +310,7 @@ const RPC = {
   resumo_caixa: { abertura: 150, formas: { dinheiro: 97.7, pix: 65.8, credito: 110, debito: 26.8 }, recebimentos: { dinheiro: 60, pix: 40 }, devolucoes_dinheiro: 0, suprimentos: 50, sangrias: 200, qtd_vendas: 5, dinheiro_esperado: 157.7 },
   situacao_cliente: { limite: 500, saldo_devedor: 65.5, disponivel: 434.5, em_atraso: 0, dias_atraso: 0, vale: 30, bloqueado: false, convenio: null },
   credenciais_configuradas: { certificado: true, senha: true, csc: true },
+  credenciais_pix_configuradas: { client_id: true, client_secret: true, certificado: true, chave: true },
   lotes_alerta: { vencidos: 1, vencendo: 3, lista: [] },
   alertas_vencimento: {
     dias: { pagar: 5, validade: 60, certificado: 30 },
@@ -394,6 +396,20 @@ function consulta(tabela) {
   return q
 }
 
+const INDICADORES_DEMO = {
+  mes: '2026-11', dia: 24, dias_mes: 30, vendas: { total: 48250.4, qtd: 1612, descontos: 905.3, canceladas: 3, dias_com_venda: 23 },
+  anterior: { total: 44120.9, qtd: 1540 }, margem: 12980, faturamento_com_custo: 41300,
+  mais_vendidos: [{ descricao: 'Dipirona Monoidratada 500 mg', quantidade: 410, total: 2829 }, { descricao: 'Fralda infantil G', quantidade: 48, total: 2635.2 }, { descricao: 'Protetor solar FPS 50', quantidade: 39, total: 2336.1 }],
+  formas: { pix: 21400, dinheiro: 13100, debito: 7800, credito: 5950.4 }, crediario_atrasado: 612.4, estoque_baixo: 3, lotes_vencendo: 2, lotes_vencidos: 1,
+  financeiro: { pagos_mes: 9800, compras_mes: 27400, a_vencer_mes: 3150, a_receber_total: 2210, teto_gastos: 11000 },
+}
+function pixDemo(b = {}) {
+  if (b.acao === 'testar') return { ok: true, mensagem: 'Autenticação no banco funcionando.' }
+  if (b.acao === 'cobrar') return { txid: 'DEMO7Kq2Lx9Pz4Rt8Vb1Nc6Hy3Ws5', valor: b.valor, status: 'ativa', expira_em: new Date(Date.now() + 600000).toISOString(),
+    copia_e_cola: '00020101021226850014br.gov.bcb.pix2563pix.banco.exemplo.com.br/qr/v2/cobv/9d36b84fc70b478fb95c12729b90ca255204000053039865802BR5913Farma Familia6006Breves62070503***6304A1B2' }
+  return { txid: b.txid, status: 'ativa' }
+}
+
 export const clienteDemo = {
   auth: {
     getSession: async () => ({ data: { session: (() => { try { return localStorage.getItem('demo:saiu') ? null : { user: { id: 'u1' } } } catch { return { user: { id: 'u1' } } } })() } }),
@@ -415,7 +431,7 @@ export const clienteDemo = {
     if (nome === 'relatorio_contas') return { data: relatorioDemo(args), error: null }
     return { data: RPC[nome] ?? null, error: null }
   },
-  functions: { invoke: async (_n, { body } = {}) => body?.acao === 'transmitir' ? { data: { autorizadas: 0, rejeitadas: 0, sem_comunicacao: true, mensagens: [] }, error: null } : ({ data: { titular: EMP.certificado_titular, validade: EMP.certificado_validade, sefaz: { codigo: '107', mensagem: 'Serviço em Operação' } }, error: null }) },
+  functions: { invoke: async (n, { body } = {}) => n === 'resumo' ? { data: { paragrafos: textoPorRegras(INDICADORES_DEMO), fonte: 'regras', aviso: null }, error: null } : n === 'pix' ? { data: pixDemo(body), error: null } : body?.acao === 'transmitir' ? { data: { autorizadas: 0, rejeitadas: 0, sem_comunicacao: true, mensagens: [] }, error: null } : ({ data: { titular: EMP.certificado_titular, validade: EMP.certificado_validade, sefaz: { codigo: '107', mensagem: 'Serviço em Operação' } }, error: null }) },
 }
 
 export const criarCliente = () => clienteDemo

@@ -6,6 +6,7 @@ import { configImpressao, htmlTeste, imprimirHtml } from '../lib/impressao.js'
 import { dataHora, lerNumero } from '../lib/formato.js'
 import { Botao, Cabecalho, Campo, Lista, Confirmacao, Icone, useAviso } from '../components/ui.jsx'
 import { JanelaAliquotasUF } from '../components/AliquotasUF.jsx'
+import { ConfigPixCartao } from '../components/ConfigPixCartao.jsx'
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map((u) => ({ valor: u, texto: u }))
 const REGIMES = [
@@ -60,7 +61,7 @@ export default function Configuracoes() {
 
   const salvarEmpresa = async () => {
     setSalvando('empresa')
-    const { id, criado_em, ativa, certificado_titular, certificado_validade, certificado_atualizado_em, ...dados } = emp
+    const { id, criado_em, ativa, certificado_titular, certificado_validade, certificado_atualizado_em, pix_dinamico, cartao_credenciadora_cnpj, cartao_pedir_dados, ...dados } = emp
     dados.cnpj = dados.cnpj?.replace(/\D/g, '') || null
     dados.inscricao_estadual = dados.inscricao_estadual?.replace(/\D/g, '') || null
     dados.municipio_ibge = dados.municipio_ibge?.replace(/\D/g, '') || null
@@ -212,6 +213,8 @@ export default function Configuracoes() {
         </div>
         <div className="flex justify-end"><Botao onClick={salvarPixBalanca} carregando={salvando === 'pix'}>Salvar PIX e balança</Botao></div>
       </section>
+
+      <ConfigPixCartao emp={emp} onSalvo={carregar} />
 
       <section className="cartao space-y-4 p-5">
         <h2 className="titulo-secao">Impressão e alertas</h2>

@@ -13,6 +13,8 @@ import { JanelaReceita } from '../components/Receita.jsx'
 import { lerEtiquetaBalanca, quantidadeDaEtiqueta } from '../lib/balanca.js'
 import { gerarPix } from '../lib/pix.js'
 import QRCode from 'qrcode'
+import { JanelaCartao, nomeBandeira } from '../components/Cartao.jsx'
+import { JanelaPixDinamico } from '../components/PixDinamico.jsx'
 import { configImpressao, imprimirComprovanteVenda } from '../lib/impressao.js'
 
 const FORMAS = [
@@ -47,6 +49,8 @@ function useConfigCaixa() {
     supabase.from('empresas').select('*').single().then(({ data }) => data && setCfg({
       balanca: data.balanca, uf: data.uf, impressao: configImpressao(data),
       pix: data.pix_chave ? { chave: data.pix_chave, nome: data.pix_nome || data.nome_fantasia || data.razao_social, cidade: data.pix_cidade || data.endereco?.municipio } : null,
+      pixDinamico: !!(data.pix_dinamico?.url_api && data.pix_dinamico?.url_token && data.pix_dinamico?.chave),
+      cartao: { pedir: !!data.cartao_pedir_dados, credenciadora: data.cartao_credenciadora_cnpj || null },
     }))
   }, [])
   return cfg
@@ -476,6 +480,8 @@ function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir })
   const [receita, setReceita] = useState(null)
   const [pedirReceita, setPedirReceita] = useState(false)
   const [qrPix, setQrPix] = useState(null)
+  const [pixBanco, setPixBanco] = useState(null)   // { valor } enquanto a cobrança do banco está aberta
+  const [cartao, setCartao] = useState(null)       // { forma, valor } enquanto pede os dados da maquininha
   const mostrarPix = async (v) => {
     if (!cfg?.pix) return
     try {
@@ -518,8 +524,13 @@ function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir })
     if (forma !== 'dinheiro' && v > t.falta) { avisar('Somente o pagamento em dinheiro pode gerar troco.', 'erro'); return }
     if (forma === 'vale' && v > valeDisponivel) { avisar(`Saldo de vale-troca: ${dinheiro(valeDisponivel)}.`, 'erro'); return }
     if (forma === 'crediario' && v > limiteDisponivel) { avisar(`Limite disponível: ${dinheiro(limiteDisponivel)}.`, 'erro'); return }
+    // PIX dinâmico: o pagamento só entra depois que o banco confirmar
+    if (forma === 'pix' && cfg?.pixDinamico) { setPixBanco({ valor: arred(v) }); setValor(''); return }
+    // Maquininha: pede bandeira e autorização do comprovante (vão para a NFC-e)
+    if ((forma === 'debito' || forma === 'credito') && cfg?.cartao?.pedir) { setCartao({ forma, valor: arred(v) }); setValor(''); return }
     const pg = { forma, valor: arred(v) }
     if (forma === 'crediario') { pg.parcelas = parcelas; pg.primeiro_vencimento = primeiroVenc }
+    if ((forma === 'debito' || forma === 'credito') && cfg?.cartao?.credenciadora) pg.credenciadora_cnpj = cfg.cartao.credenciadora
     setPagamentos((p) => [...p, pg])
     setValor('')
     if (forma === 'pix') mostrarPix(arred(v))
@@ -528,6 +539,7 @@ function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir })
   useEffect(() => {
     const tecla = (e) => {
       if (e.target.tagName === 'INPUT' && e.target.dataset.valor !== 'sim') return
+      if (pixBanco || cartao || qrPix) return
       const f = FORMAS.find((x) => x.tecla === e.key)
       if (f && t.falta > 0) { e.preventDefault(); incluir(f.forma) }
     }
@@ -611,9 +623,12 @@ function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir })
         <ul className="mt-4 divide-y divide-papel-200 rounded-xl border border-papel-200 dark:divide-noite-700 dark:border-noite-700">
           {pagamentos.map((p, i) => (
             <li key={i} className="flex items-center justify-between px-4 py-2.5">
-              <span>{nomeForma(p.forma)}{p.parcelas > 1 ? ` em ${p.parcelas}× de ${dinheiro(p.valor / p.parcelas)}` : ''}</span>
+              <span>{nomeForma(p.forma)}{p.parcelas > 1 ? ` em ${p.parcelas}× de ${dinheiro(p.valor / p.parcelas)}` : ''}
+                {p.pix_txid && <span className="ml-2 text-xs font-medium text-caixa-600 dark:text-caixa-300">confirmado pelo banco</span>}
+                {p.bandeira && <span className="ml-2 text-xs text-tinta-400">{nomeBandeira(p.bandeira)}{p.autorizacao ? `, aut. ${p.autorizacao}` : ''}</span>}
+              </span>
               <span className="flex items-center gap-3">
-                {p.forma === 'pix' && cfg?.pix && <button className="text-sm font-medium text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => mostrarPix(p.valor)}>QR Code</button>}
+                {p.forma === 'pix' && cfg?.pix && !p.pix_txid && <button className="text-sm font-medium text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => mostrarPix(p.valor)}>QR Code</button>}
                 <strong className="num">{dinheiro(p.valor)}</strong>
                 <button className="rounded p-1 text-tinta-400 hover:text-rubro-600" onClick={() => setPagamentos((x) => x.filter((_, j) => j !== i))} aria-label="Remover pagamento"><Icone nome="fechar" className="h-4 w-4" /></button>
               </span>
@@ -634,6 +649,17 @@ function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir })
       <JanelaReceita controlados={controlados} cliente={cliente} ufPadrao={cfg?.uf} inicial={receita ? { ...receita } : null}
         onFechar={() => setPedirReceita(false)}
         onConfirmar={(r) => { const concluir = pedirReceita === 'concluir'; setReceita(r); setPedirReceita(false); if (concluir) finalizar(r) }} />
+    )}
+    {pixBanco && (
+      <JanelaPixDinamico valor={pixBanco.valor} caixaId={caixa.id} podeUsarFixo={!!cfg?.pix}
+        onPago={(c) => { setPagamentos((p) => [...p, { forma: 'pix', valor: Number(c.valor), pix_txid: c.txid }]); setPixBanco(null); avisar('PIX confirmado pelo banco.') }}
+        onUsarFixo={() => { const v = pixBanco.valor; setPixBanco(null); setPagamentos((p) => [...p, { forma: 'pix', valor: v }]); mostrarPix(v) }}
+        onFechar={() => setPixBanco(null)} />
+    )}
+    {cartao && (
+      <JanelaCartao forma={cartao.forma} valor={cartao.valor} credenciadora={cfg?.cartao?.credenciadora}
+        onConfirmar={(d) => { setPagamentos((p) => [...p, { forma: cartao.forma, valor: cartao.valor, ...d }]); setCartao(null) }}
+        onFechar={() => setCartao(null)} />
     )}
     {qrPix && (
       <TelaSuspensa aberta titulo="PIX" subtitulo={`Cobrança de ${dinheiro(qrPix.valor)}`} onFechar={() => setQrPix(null)}

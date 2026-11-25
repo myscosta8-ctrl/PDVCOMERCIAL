@@ -119,7 +119,7 @@ async function montarNota(empresa: Record<string, any>, venda: Record<string, an
     servico.from("venda_itens")
       .select("sequencia, quantidade, preco_unitario, desconto, descricao, cfop, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, origem, ncm, cest, cbenef, produto:produtos(id, codigo, ean, ncm, cest, cfop, unidade, origem, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cbenef, cst_ibscbs, cclasstrib, reducao_ibscbs)")
       .eq("venda_id", venda.id).order("sequencia"),
-    servico.from("venda_pagamentos").select("forma, valor").eq("venda_id", venda.id),
+    servico.from("venda_pagamentos").select("forma, valor, bandeira, autorizacao, credenciadora_cnpj").eq("venda_id", venda.id),
   ]);
   if (!itens?.length) throw new ErroUsuario("Venda sem itens.");
   const descontos = ratearDesconto(
@@ -149,7 +149,7 @@ async function montarNota(empresa: Record<string, any>, venda: Record<string, an
         cst_ibscbs: f("cst_ibscbs"), cclasstrib: f("cclasstrib"), reducao_ibscbs: Number(f("reducao_ibscbs") ?? 0),
       };
     }),
-    pagamentos: (pagamentos ?? []).map((p) => ({ forma: p.forma, valor: Number(p.valor) })),
+    pagamentos: (pagamentos ?? []).map((p) => ({ forma: p.forma, valor: Number(p.valor), bandeira: p.bandeira, autorizacao: p.autorizacao, credenciadora_cnpj: p.credenciadora_cnpj })),
     troco: Number(venda.troco),
     cpf_cnpj_consumidor: venda.cpf_consumidor,
     aliquotasIBSCBS: empresa.ibscbs_aliquotas,
