@@ -23,6 +23,7 @@ import Estoque from './pages/Estoque.jsx'
 import Fiscal from './pages/Fiscal.jsx'
 import Controlados from './pages/Controlados.jsx'
 import Revenda from './pages/Revenda.jsx'
+import Relatorios from './pages/Relatorios.jsx'
 
 const TELAS = [
   { id: 'inicio', grupo: 'vender', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
@@ -40,6 +41,7 @@ const TELAS = [
   { id: 'mdfe', grupo: 'gestao', nome: 'Manifestos (MDF-e)', icone: 'estoque', papeis: ['administrador', 'gerente'] },
   { id: 'fiscal', grupo: 'gestao', nome: 'Fiscal', icone: 'nota', papeis: ['administrador', 'gerente'] },
   { id: 'vendas', grupo: 'gestao', nome: 'Vendas', icone: 'vendas', papeis: ['administrador', 'gerente'] },
+  { id: 'relatorios', grupo: 'gestao', nome: 'Relatórios', icone: 'grafico', papeis: ['administrador', 'gerente'] },
   { id: 'configuracoes', grupo: 'sistema', nome: 'Configurações', icone: 'configuracoes', papeis: ['administrador'] },
   { id: 'revenda', grupo: 'sistema', nome: 'Revenda', icone: 'usuario', papeis: [], revendedor: true },
 ]
@@ -202,6 +204,7 @@ function Painel() {
           {tela === 'controlados' && perfil.papel !== 'operador' && <Controlados />}
           {tela === 'fiscal' && perfil.papel !== 'operador' && <Fiscal />}
           {tela === 'vendas' && perfil.papel !== 'operador' && <Vendas irPara={ir} />}
+          {tela === 'relatorios' && perfil.papel !== 'operador' && <Relatorios />}
           {tela === 'notas' && perfil.papel !== 'operador' && <NotasFiscais />}
           {tela === 'mdfe' && perfil.papel !== 'operador' && <Manifestos />}
           {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}

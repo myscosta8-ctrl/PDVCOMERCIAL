@@ -299,6 +299,48 @@ const MENSALIDADES_DEMO = [
   { id: 'm1', competencia: '2026-09-01', vencimento: '2026-09-10', valor: 149.9, status: 'paga', pago_em: '2026-09-12', forma: 'Boleto' },
 ]
 
+function relGerencialDemo({ p_inicio, p_fim }) {
+  const dias = []
+  for (let d = new Date(`${p_inicio}T12:00:00`); d <= new Date(`${p_fim}T12:00:00`); d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay(), base = dow === 0 ? 900 : dow === 6 ? 2600 : 1700
+    const total = Math.round((base + ((d.getDate() * 137) % 700)) * 100) / 100
+    dias.push({ dia: d.toISOString().slice(0, 10), total, qtd: Math.round(total / 31) })
+  }
+  const total = dias.reduce((s, d) => s + d.total, 0), qtd = dias.reduce((s, d) => s + d.qtd, 0)
+  const mapa = []
+  for (let dow = 0; dow < 7; dow++) for (let h = 7; h <= 21; h++) {
+    const pico = (h >= 10 && h <= 12) || (h >= 17 && h <= 19) ? 3 : 1
+    mapa.push({ dow, hora: h, total: (dow === 0 && h > 13) ? 0 : pico * (dow === 6 ? 140 : 90) + ((dow * 31 + h * 17) % 60), qtd: 2 })
+  }
+  const prod = [['Dipirona Monoidratada 500 mg', 'Medicamentos', 0.11, 0.34], ['Fralda infantil G', 'Higiene', 0.09, 0.7], ['Protetor solar FPS 50', 'Dermocosméticos', 0.085, 0.52],
+    ['Vitamina C 1 g efervescente', 'Suplementos', 0.07, 0.38], ['Paracetamol 750 mg', 'Medicamentos', 0.065, 0.4], ['Soro fisiológico 500 ml', 'Medicamentos', 0.06, 0.44],
+    ['Álcool 70% 1 litro', 'Higiene', 0.05, 0.48], ['Shampoo anticaspa', 'Higiene', 0.045, 0.55], ['Termômetro digital', 'Correlatos', 0.04, 0.5],
+    ['Escova dental macia', 'Higiene', 0.035, 0.42], ['Hidratante corporal', 'Dermocosméticos', 0.03, 0.5], ['Curativo adesivo', 'Correlatos', 0.025, 0.4],
+    ['Clonazepam 2 mg', 'Medicamentos', 0.02, 0.33], ['Meia esportiva', 'Vestuário', 0.012, 0.38], ['Repelente spray', 'Higiene', 0.008, 0.6]]
+  const produtos = prod.map(([descricao, categoria, part, cst], i) => ({ id: `r${i}`, descricao, categoria, total: Math.round(total * part * 100) / 100, quantidade: Math.round(total * part / (8 + i * 3)), custo: i === 13 ? null : Math.round(total * part * cst * 100) / 100, vendas: 40 }))
+  const resto = total - produtos.reduce((s, p) => s + p.total, 0)
+  produtos.push({ id: 'rx', descricao: 'Demais produtos (142 itens)', categoria: 'Diversos', total: Math.round(resto * 100) / 100, quantidade: 860, custo: Math.round(resto * 0.55 * 100) / 100, vendas: 300 })
+  const cats = {}
+  for (const p of produtos) { const c = cats[p.categoria] ??= { nome: p.categoria, produtos: 0, quantidade: 0, total: 0, custo: 0, total_com_custo: 0 }; c.produtos++; c.quantidade += p.quantidade; c.total += p.total; if (p.custo != null) { c.custo += p.custo; c.total_com_custo += p.total } }
+  const custo = produtos.reduce((s, p) => s + (p.custo ?? 0), 0), comCusto = produtos.reduce((s, p) => s + (p.custo != null ? p.total : 0), 0)
+  return {
+    periodo: { inicio: p_inicio, fim: p_fim, dias: dias.length, anterior_inicio: '2026-10-08', anterior_fim: '2026-10-31' },
+    resumo: { total, qtd, descontos: total * 0.018, itens: qtd * 2.3, custo, total_com_custo: comCusto, canceladas: 3, devolucoes: 214.5, clientes: 186 },
+    anterior: { total: total * 0.91, qtd: Math.round(qtd * 0.94), custo: custo * 0.9, total_com_custo: comCusto * 0.91, devolucoes: 120 },
+    por_dia: dias, mapa_horas: mapa, produtos, categorias: Object.values(cats).sort((a, b) => b.total - a.total),
+    operadores: [{ nome: 'Brenda Souza', vendas: Math.round(qtd * 0.46), total: total * 0.47, descontos: total * 0.008, canceladas: 1 },
+      { nome: 'Carlos Lima', vendas: Math.round(qtd * 0.31), total: total * 0.30, descontos: total * 0.006, canceladas: 2 },
+      { nome: 'Naldo Pereira', vendas: Math.round(qtd * 0.23), total: total * 0.23, descontos: total * 0.004, canceladas: 0 }],
+    formas: [{ forma: 'pix', vendas: Math.round(qtd * 0.42), total: total * 0.44 }, { forma: 'dinheiro', vendas: Math.round(qtd * 0.3), total: total * 0.24 },
+      { forma: 'debito', vendas: Math.round(qtd * 0.15), total: total * 0.16 }, { forma: 'credito', vendas: Math.round(qtd * 0.1), total: total * 0.13 }, { forma: 'crediario', vendas: Math.round(qtd * 0.03), total: total * 0.03 }],
+    clientes: [['Maria das Graças', 14, 1240.3], ['João Batista', 9, 980.1], ['Ana Paula Ribeiro', 11, 812.9], ['Francisco Alves', 6, 640], ['Raimunda Costa', 8, 590.45]]
+      .map(([nome, vendas, t]) => ({ nome, vendas, total: t, ultima: h(10, 15) })),
+    parados: [['Bota ortopédica tamanho 42', 3, 'UN', 189.9, '2026-07-12'], ['Inalador ultrassônico', 2, 'UN', 145, '2026-08-30'], ['Kit manicure profissional', 6, 'UN', 38.5, null],
+      ['Colete cervical', 4, 'UN', 52, '2026-09-04'], ['Perfume infantil 100 ml', 7, 'UN', 21.9, '2026-06-21']]
+      .map(([descricao, e, unidade, c, u], i) => ({ id: `z${i}`, descricao, estoque_atual: e, unidade, preco_custo: c, valor_estoque: e * c, ultima_venda: u })),
+  }
+}
+
 const RPC = {
   revenda_painel: REVENDA,
   revenda_mensalidades: MENSALIDADES_DEMO,
@@ -452,6 +494,7 @@ export const clienteDemo = {
     }
     if (nome === 'fluxo_caixa') return { data: fluxoDemo(args), error: null }
     if (nome === 'dre') return { data: dreDemo(args), error: null }
+    if (nome === 'relatorio_gerencial') return { data: relGerencialDemo(args), error: null }
     if (nome === 'relatorio_contas') return { data: relatorioDemo(args), error: null }
     return { data: RPC[nome] ?? null, error: null }
   },
