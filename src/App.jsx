@@ -11,6 +11,7 @@ import PDV from './pages/PDV.jsx'
 import Caixa from './pages/Caixa.jsx'
 import Produtos from './pages/Produtos.jsx'
 import NotasFiscais from './pages/NotasFiscais.jsx'
+import Manifestos from './pages/Manifestos.jsx'
 import Vendas from './pages/Vendas.jsx'
 import Configuracoes from './pages/Configuracoes.jsx'
 import Clientes from './pages/Clientes.jsx'
@@ -35,6 +36,7 @@ const TELAS = [
   { id: 'financeiro', grupo: 'gestao', nome: 'Financeiro', icone: 'grafico', papeis: ['administrador', 'gerente'] },
   { id: 'controlados', grupo: 'gestao', nome: 'Controlados', icone: 'alerta', papeis: ['administrador', 'gerente'], segmento: 'farmacia' },
   { id: 'notas', grupo: 'gestao', nome: 'Notas fiscais (NF-e)', icone: 'nota', papeis: ['administrador', 'gerente'] },
+  { id: 'mdfe', grupo: 'gestao', nome: 'Manifestos (MDF-e)', icone: 'estoque', papeis: ['administrador', 'gerente'] },
   { id: 'fiscal', grupo: 'gestao', nome: 'Fiscal', icone: 'nota', papeis: ['administrador', 'gerente'] },
   { id: 'vendas', grupo: 'gestao', nome: 'Vendas', icone: 'vendas', papeis: ['administrador', 'gerente'] },
   { id: 'configuracoes', grupo: 'sistema', nome: 'Configurações', icone: 'configuracoes', papeis: ['administrador'] },
@@ -188,6 +190,7 @@ function Painel() {
           {tela === 'fiscal' && perfil.papel !== 'operador' && <Fiscal />}
           {tela === 'vendas' && perfil.papel !== 'operador' && <Vendas irPara={ir} />}
           {tela === 'notas' && perfil.papel !== 'operador' && <NotasFiscais />}
+          {tela === 'mdfe' && perfil.papel !== 'operador' && <Manifestos />}
           {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}
         </main>
       </div>

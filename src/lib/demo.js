@@ -8,7 +8,7 @@ const EMP = {
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
   pix_chave: '12345678000195', pix_nome: 'Farma Familia', pix_cidade: 'Breves', balanca: { ativo: true, digitos_codigo: 5, tipo: 'preco' },
-  nfe_serie: 1, aliquotas_uf: {}, dfe_consultado_em: '2026-11-24T13:02:00Z', dfe_liberado_em: null, dfe_ult_nsu: '000000000000231', impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
+  nfe_serie: 1, mdfe_serie: 1, aliquotas_uf: {}, dfe_consultado_em: '2026-11-24T13:02:00Z', dfe_liberado_em: null, dfe_ult_nsu: '000000000000231', impressao: { largura: 80, automatica: true, comprovante: true, vias_crediario: 2, mensagem: 'Obrigado pela preferência!' }, alertas: { dias_pagar: 5, dias_validade: 60, dias_certificado: 30 },
   contador: { nome: 'Escritório Contábil Exemplo', cpf: '12345678909', crc: 'PA-012345/O' }, sped_perfil: 'A', cod_receita_icms: null,
   endereco: { logradouro: 'Rua Presidente Getúlio Vargas', numero: '120', bairro: 'Centro', municipio: 'Breves', cep: '68800000', fone: '91999990000' },
 }
@@ -228,6 +228,17 @@ const TABELAS = {
     { id: 'nd2', venda_id: 'v8', numero: 313, serie: 1, status: 'contingencia', ambiente: 2, dh_contingencia: h(17, 5), criado_em: h(17, 5), motivo: 'Emitida em contingência; será transmitida quando a SEFAZ responder.', venda: { numero: 1049, total: 42.5 } },
     { id: 'nd3', venda_id: 'v4', numero: 307, serie: 1, status: 'cancelada', ambiente: 2, cancelada_em: h(14, 20), protocolo_cancelamento: '315260000098765', justificativa_cancelamento: 'Cliente desistiu da compra no caixa', venda: { numero: 1045, total: 18.4 } },
     { id: 'nd4', venda_id: 'v6', numero: 311, serie: 1, status: 'rejeitada', ambiente: 2, codigo_status: '778', motivo: 'Rejeição: Informado NCM inexistente' },
+  ],
+  mdfe_documentos: [
+    { id: 'md2', numero: 4, serie: 1, status: 'autorizada', ambiente: 2, uf_inicio: 'PA', uf_fim: 'PA', percurso: [], emitida_em: h(8, 10), criado_em: h(8, 0),
+      carregamento: [{ codigo: '1501808', nome: 'Breves' }], descargas: [{ codigo: '1501402', nome: 'Belém', chaves: ['15261112345678000195550010000000151876543210'] }],
+      veiculo: { placa: 'QDF4A21', renavam: '01234567890', tara: 2100, capKG: 3500, tpRod: '05', tpCar: '02', uf: 'PA' }, condutores: [{ nome: 'Raimundo Nonato Lima', cpf: '52998224725' }],
+      produto: { tpCarga: '05', xProd: 'Medicamentos e produtos de higiene', ncm: '30049099' }, valor_carga: 486.5, unidade: '01', peso_carga: 22.4,
+      chave: '15261112345678000195580010000000041123456785', protocolo: '915260000004321' },
+    { id: 'md1', numero: 3, serie: 1, status: 'encerrada', ambiente: 2, uf_inicio: 'PA', uf_fim: 'AM', percurso: [], emitida_em: '2026-11-18T12:00:00Z', criado_em: '2026-11-18T11:40:00Z', encerrada_em: '2026-11-20T15:00:00Z',
+      carregamento: [{ codigo: '1501808', nome: 'Breves' }], descargas: [{ codigo: '1302603', nome: 'Manaus', chaves: ['15261112345678000195550010000000141876543219', '15261112345678000195550010000000131876543218'] }],
+      veiculo: { placa: 'QDF4A21', tara: 2100, tpRod: '05', tpCar: '02', uf: 'PA' }, condutores: [{ nome: 'Raimundo Nonato Lima', cpf: '52998224725' }],
+      produto: { tpCarga: '05', xProd: 'Medicamentos', ncm: '30049099' }, valor_carga: 1840.2, unidade: '01', peso_carga: 96, chave: '15261112345678000195580010000000031123456784', protocolo: '915260000003210' },
   ],
   nfe_recebidas: [
     { id: 'r1', chave: '15261111222333000144550010000891121000067890', cnpj_emitente: '11222333000144', nome_emitente: 'Distribuidora Norte Farma Ltda', emissao: '2026-11-24T08:40:00-03:00', valor: 2310.75, situacao: 1, protocolo: '315260000201111', resumo: true, manifestacao: null },

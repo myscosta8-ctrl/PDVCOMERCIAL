@@ -168,6 +168,7 @@ export default function Configuracoes() {
           <div className="sm:col-span-2"><Campo rotulo="Ambiente de emissão"><Lista valor={Number(emp.nfce_ambiente)} opcoes={AMBIENTES} onMudar={mudarAmbiente} /></Campo></div>
           <Campo rotulo="Série da NFC-e"><input className="campo" inputMode="numeric" value={emp.nfce_serie ?? 1} onChange={m('nfce_serie')} /></Campo>
           <Campo rotulo="Série da NF-e"><input className="campo" inputMode="numeric" value={emp.nfe_serie ?? 1} onChange={m('nfe_serie')} /></Campo>
+          <Campo rotulo="Série do MDF-e"><input className="campo" inputMode="numeric" value={emp.mdfe_serie ?? 1} onChange={m('mdfe_serie')} /></Campo>
           <Campo rotulo="ID do CSC"><input className="campo" inputMode="numeric" value={emp.nfce_csc_id ?? ''} onChange={m('nfce_csc_id')} placeholder="ex.: 000001" /></Campo>
           <div className="sm:col-span-2"><Campo rotulo="Endereço do QR Code (homologação)"><input className="campo" value={emp.nfce_url_qrcode ?? ''} onChange={m('nfce_url_qrcode')} /></Campo></div>
           <div className="sm:col-span-2"><Campo rotulo="Endereço de consulta pela chave"><input className="campo" value={emp.nfce_url_consulta ?? ''} onChange={m('nfce_url_consulta')} /></Campo></div>

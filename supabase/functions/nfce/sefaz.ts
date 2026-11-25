@@ -44,6 +44,19 @@ export async function enviarAN(servico: keyof typeof AN, ambiente: 1 | 2, corpo:
   return await postar(AN[servico][ambiente], corpoSoap, cert);
 }
 
+// MDF-e: autorizado pela SVRS para todas as UFs
+const MDFE = { 1: "https://mdfe.svrs.rs.gov.br/ws", 2: "https://mdfe-homologacao.svrs.rs.gov.br/ws" } as const;
+const SERVICOS_MDFE = {
+  recepcao: "MDFeRecepcaoSinc", evento: "MDFeRecepcaoEvento", consulta: "MDFeConsulta", status: "MDFeStatusServico",
+} as const;
+
+// corpo: XML do pedido (na recepção síncrona, já compactado em base64)
+export async function enviarMDFe(servico: keyof typeof SERVICOS_MDFE, ambiente: 1 | 2, corpo: string, cert: Certificado): Promise<string> {
+  const w = SERVICOS_MDFE[servico];
+  return await postar(`${MDFE[ambiente]}/${w}/${w}.asmx`,
+    `<mdfeDadosMsg xmlns="http://www.portalfiscal.inf.br/mdfe/wsdl/${w}">${corpo}</mdfeDadosMsg>`, cert);
+}
+
 async function postar(url: string, corpoSoap: string, cert: Certificado): Promise<string> {
   const envelope =
     `<?xml version="1.0" encoding="utf-8"?>` +

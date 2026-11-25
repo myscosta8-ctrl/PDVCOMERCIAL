@@ -6,12 +6,17 @@
 //   { acao: "cancelar", venda_id, justificativa }   — cancela a NFC-e na SEFAZ e depois a venda
 //   { acao: "inutilizar", serie, inicio, fim, justificativa, modelo? }
 //   Notas contra o CNPJ: { acao: "dfe_buscar" } | { acao: "dfe_baixar", chave } | { acao: "dfe_manifestar", chave, tipo, justificativa? }
+//   MDF-e: { acao: "mdfe_emitir" | "mdfe_consultar", mdfe_id } | { acao: "mdfe_encerrar", mdfe_id, uf, municipio } | { acao: "mdfe_cancelar", mdfe_id, justificativa }
 //   NF-e modelo 55: { acao: "nfe_emitir" | "nfe_consultar", nfe_id } | { acao: "nfe_cancelar", nfe_id, justificativa } | { acao: "nfe_cce", nfe_id, correcao }
 import { createClient } from "@supabase/supabase-js";
 import { montarInfNFe, montarQrCode, montarInfNFeSupl, ratearDesconto, NS_NFE, UF_CODIGO, type ItemNota } from "./xml.ts";
 import { montarInfNFe55, type Destinatario } from "./nfe55.ts";
 import { lerPfx, assinar, assinarTexto, type Certificado } from "./assinatura.ts";
-import { enviar, enviarAN, statusServico, valor, bloco } from "./sefaz.ts";
+import { enviar, enviarAN, enviarMDFe, statusServico, valor, bloco } from "./sefaz.ts";
+import {
+  montarInfMDFe, montarMDFe, compactar, montarEncerramento, montarCancelamentoMDFe, envelopeEventoMDFe, consultaMDFe, NS_MDFE,
+  type DadosMDFe,
+} from "./mdfe.ts";
 import {
   pedidoDistribuicao, pedidoPorChave, lerDistribuicao, interpretar, montarManifestacao, MANIFESTACOES, type TipoManifestacao,
   type DocumentoDistribuido, DIST_COM_DOCUMENTOS, DIST_SEM_DOCUMENTOS, DIST_CONSUMO_INDEVIDO, EVENTO_DUPLICADO,
@@ -709,6 +714,156 @@ async function manifestar(usuario: Usuario, chave: string, tipo: TipoManifestaca
   return atualizada;
 }
 
+// ------------------------------------------------------------------ MDF-e (modelo 58)
+async function carregarMdfe(usuario: Usuario, id: string) {
+  if (!GESTORES.includes(usuario.papel)) throw new ErroUsuario("MDF-e exige gerente ou administrador.");
+  const { data: d } = await servico.from("mdfe_documentos").select("*").eq("id", id).eq("empresa_id", usuario.empresa_id).maybeSingle();
+  if (!d) throw new ErroUsuario("MDF-e não encontrado.");
+  return d;
+}
+
+async function falarMDFe(s: Parameters<typeof enviarMDFe>[0], ambiente: 1 | 2, corpo: string, cert: Certificado) {
+  try {
+    return await enviarMDFe(s, ambiente, corpo, cert);
+  } catch (e) {
+    console.error(e);
+    throw new SemComunicacao(String(e).slice(0, 250));
+  }
+}
+
+async function finalizarMdfe(docId: string, mdfe: string, prot: string) {
+  const { data } = await servico.from("mdfe_documentos").update({
+    status: "autorizada", codigo_status: valor(prot, "cStat"), motivo: valor(prot, "xMotivo"), protocolo: valor(prot, "nProt"),
+    xml_autorizado: `<mdfeProc xmlns="${NS_MDFE}" versao="3.00">${mdfe}${prot}</mdfeProc>`, emitida_em: new Date().toISOString(),
+  }).eq("id", docId).select("*").single();
+  return data;
+}
+
+async function emitirMdfe(usuario: Usuario, id: string) {
+  const d = await carregarMdfe(usuario, id);
+  if (d.status === "autorizada") return d;
+  if (d.status === "pendente") return await consultarMdfe(usuario, id);
+  if (!["rascunho", "rejeitada"].includes(d.status)) throw new ErroUsuario("Este MDF-e não pode ser emitido.");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  const ambiente = Number(empresa.nfce_ambiente) as 1 | 2;
+  const serie = Number(empresa.mdfe_serie ?? 1);
+  // A SEFAZ recusa novo MDF-e para a placa com manifesto ainda não encerrado
+  const placa = String(d.veiculo?.placa ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const { data: aberto } = await servico.from("mdfe_documentos").select("numero").eq("empresa_id", usuario.empresa_id)
+    .eq("status", "autorizada").eq("ambiente", ambiente).eq("placa", placa).neq("id", d.id).limit(1).maybeSingle();
+  if (aberto) throw new ErroUsuario(`Encerre antes o MDF-e nº ${aberto.numero}, que está aberto para a placa ${placa}.`);
+  let numero = d.numero && d.ambiente === ambiente && d.serie === serie ? Number(d.numero) : 0;
+  if (!numero) {
+    const { data: n, error } = await servico.rpc("proximo_numero", { p_empresa: empresa.id, p_tipo: `mdfe_${ambiente}`, p_serie: serie });
+    if (error) throw error;
+    numero = Number(n);
+  }
+  const codigo = String(crypto.getRandomValues(new Uint32Array(1))[0] % 100000000).padStart(8, "0");
+  let montado: ReturnType<typeof montarInfMDFe>;
+  try {
+    montado = montarInfMDFe({
+      emitente: { cnpj: empresa.cnpj, ie: empresa.inscricao_estadual, razao_social: empresa.razao_social, nome_fantasia: empresa.nome_fantasia,
+        uf: empresa.uf, municipio_ibge: empresa.municipio_ibge, endereco: empresa.endereco },
+      ambiente, serie, numero, codigo_numerico: codigo, emissao: new Date(),
+      ufInicio: d.uf_inicio, ufFim: d.uf_fim, percurso: d.percurso ?? [], carregamento: d.carregamento ?? [], descargas: d.descargas ?? [],
+      veiculo: d.veiculo ?? {}, condutores: d.condutores ?? [], produto: d.produto ?? {},
+      valorCarga: Number(d.valor_carga), unidade: d.unidade === "02" ? "02" : "01", pesoCarga: Number(d.peso_carga),
+      informacoes: d.informacoes, respTecnico: empresa.resp_tecnico,
+    } as DadosMDFe);
+  } catch (e) {
+    throw new ErroUsuario((e as Error).message);
+  }
+  const mdfe = montarMDFe(montado.infMDFe, assinar(montado.infMDFe, "infMDFe", `MDFe${montado.chave}`, cert, NS_MDFE), montado.qrCode);
+  await servico.from("mdfe_documentos").update({
+    status: "pendente", ambiente, serie, numero, chave: montado.chave, codigo_numerico: codigo, placa: montado.placa, xml_enviado: mdfe,
+    codigo_status: null, motivo: null,
+  }).eq("id", d.id);
+  let retorno: string;
+  try {
+    retorno = await falarMDFe("recepcao", ambiente, compactar(mdfe), cert);
+  } catch (e) {
+    if (!(e instanceof SemComunicacao)) throw e;
+    await servico.from("mdfe_documentos").update({ motivo: `Sem resposta da SEFAZ: ${e.message}` }).eq("id", d.id);
+    throw new ErroUsuario("A SEFAZ não respondeu. O MDF-e ficou pendente; use Consultar em alguns minutos.");
+  }
+  const prot = bloco(retorno, "protMDFe");
+  const cStat = valor(prot ?? retorno, "cStat");
+  if (prot && cStat === "100") return await finalizarMdfe(d.id, mdfe, prot);
+  const motivo = valor(prot ?? retorno, "xMotivo");
+  await servico.from("mdfe_documentos").update({ status: "rejeitada", codigo_status: cStat, motivo }).eq("id", d.id);
+  throw new ErroUsuario(`MDF-e rejeitado pela SEFAZ (${cStat}): ${motivo}`);
+}
+
+async function consultarMdfe(usuario: Usuario, id: string) {
+  const d = await carregarMdfe(usuario, id);
+  if (d.status !== "pendente" || !d.chave) return d;
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  let ret: string;
+  try {
+    ret = await falarMDFe("consulta", Number(d.ambiente) as 1 | 2, consultaMDFe(d.chave, Number(d.ambiente) as 1 | 2), cert);
+  } catch (e) {
+    if (e instanceof SemComunicacao) throw new ErroUsuario("A SEFAZ continua sem responder. Tente de novo em alguns minutos.");
+    throw e;
+  }
+  const prot = bloco(ret, "protMDFe");
+  if (prot && valor(prot, "cStat") === "100") return await finalizarMdfe(d.id, d.xml_enviado, prot);
+  const cStat = valor(ret, "cStat");
+  if (cStat === "217") {
+    const { data } = await servico.from("mdfe_documentos").update({ status: "rejeitada", codigo_status: cStat, motivo: "O MDF-e não chegou à SEFAZ. Emita de novo." }).eq("id", d.id).select("*").single();
+    return data;
+  }
+  throw new ErroUsuario(`Situação na SEFAZ (${cStat}): ${valor(ret, "xMotivo")}`);
+}
+
+async function eventoMdfe(ambiente: 1 | 2, cert: Certificado, ev: { id: string; infEvento: string }) {
+  const xml = envelopeEventoMDFe(ev.infEvento, assinar(ev.infEvento, "infEvento", ev.id, cert, NS_MDFE));
+  let retorno: string;
+  try {
+    retorno = await falarMDFe("evento", ambiente, xml, cert);
+  } catch (e) {
+    if (e instanceof SemComunicacao) throw new ErroUsuario("Sem comunicação com a SEFAZ. Tente de novo em alguns minutos.");
+    throw e;
+  }
+  const ret = bloco(retorno, "retEventoMDFe") ?? retorno;
+  const cStat = String(valor(ret, "cStat"));
+  if (!EVENTO_OK.has(cStat)) throw new ErroUsuario(`Evento recusado pela SEFAZ (${cStat}): ${valor(ret, "xMotivo")}`);
+  return { protocolo: valor(ret, "nProt"), xml: `<procEventoMDFe xmlns="${NS_MDFE}" versao="3.00">${xml}${ret}</procEventoMDFe>` };
+}
+
+async function encerrarMdfe(usuario: Usuario, id: string, uf: string, municipio: string) {
+  const d = await carregarMdfe(usuario, id);
+  if (d.status !== "autorizada") throw new ErroUsuario("Só MDF-e autorizado pode ser encerrado.");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  let ev;
+  try {
+    ev = montarEncerramento({ chave: d.chave, cnpj: empresa.cnpj, ambiente: Number(d.ambiente) as 1 | 2, quando: new Date(), protocolo: d.protocolo, uf, municipio });
+  } catch (e) { throw new ErroUsuario((e as Error).message); }
+  const r = await eventoMdfe(Number(d.ambiente) as 1 | 2, cert, ev);
+  const { data } = await servico.from("mdfe_documentos").update({
+    status: "encerrada", encerrada_em: new Date().toISOString(), encerramento: { uf, municipio }, protocolo_evento: r.protocolo, xml_evento: r.xml,
+  }).eq("id", d.id).select("*").single();
+  return data;
+}
+
+async function cancelarMdfe(usuario: Usuario, id: string, justificativa: string) {
+  const d = await carregarMdfe(usuario, id);
+  if (d.status !== "autorizada") throw new ErroUsuario("Só MDF-e autorizado e ainda não encerrado pode ser cancelado.");
+  const empresa = await carregarEmpresa(usuario.empresa_id, 55);
+  const { cert } = await carregarCertificado(empresa, false);
+  let ev;
+  try {
+    ev = montarCancelamentoMDFe({ chave: d.chave, cnpj: empresa.cnpj, ambiente: Number(d.ambiente) as 1 | 2, quando: new Date(), protocolo: d.protocolo, justificativa: justificativa ?? "" });
+  } catch (e) { throw new ErroUsuario((e as Error).message); }
+  const r = await eventoMdfe(Number(d.ambiente) as 1 | 2, cert, ev);
+  const { data } = await servico.from("mdfe_documentos").update({
+    status: "cancelada", cancelada_em: new Date().toISOString(), justificativa_cancelamento: justificativa.trim(), protocolo_evento: r.protocolo, xml_evento: r.xml,
+  }).eq("id", d.id).select("*").single();
+  return data;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -741,6 +896,13 @@ Deno.serve(async (req) => {
     if (corpo.acao === "dfe_buscar") return resposta(await buscarDfe(usuario));
     if (corpo.acao === "dfe_baixar") return resposta(await baixarDfe(usuario, String(corpo.chave ?? "")));
     if (corpo.acao === "dfe_manifestar") return resposta(await manifestar(usuario, String(corpo.chave ?? ""), corpo.tipo, corpo.justificativa));
+    if (corpo.acao === "mdfe_emitir" || corpo.acao === "mdfe_consultar") {
+      const doc = await (corpo.acao === "mdfe_emitir" ? emitirMdfe : consultarMdfe)(usuario, String(corpo.mdfe_id ?? ""));
+      const { xml_enviado: _x, xml_autorizado: _y, ...semXml } = doc as Record<string, unknown>;
+      return resposta(semXml);
+    }
+    if (corpo.acao === "mdfe_encerrar") return resposta(await encerrarMdfe(usuario, String(corpo.mdfe_id ?? ""), String(corpo.uf ?? ""), String(corpo.municipio ?? "")));
+    if (corpo.acao === "mdfe_cancelar") return resposta(await cancelarMdfe(usuario, String(corpo.mdfe_id ?? ""), String(corpo.justificativa ?? "")));
     if (corpo.acao === "nfe_cce") return resposta(await cartaCorrecao(usuario, corpo.nfe_id, corpo.correcao));
     throw new ErroUsuario("Ação desconhecida.");
   } catch (e) {

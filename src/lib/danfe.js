@@ -27,6 +27,11 @@ export function lerNfe55(xml) {
     }),
     tot: { vBC: n(um(tot, 'vBC')), vICMS: n(um(tot, 'vICMS')), vProd: n(um(tot, 'vProd')), vFrete: n(um(tot, 'vFrete')), vSeg: n(um(tot, 'vSeg')),
       vDesc: n(um(tot, 'vDesc')), vOutro: n(um(tot, 'vOutro')), vIPI: n(um(tot, 'vIPI')), vNF: n(um(tot, 'vNF')), vPIS: n(um(tot, 'vPIS')), vCOFINS: n(um(tot, 'vCOFINS')) },
+    ibscbs: (() => {
+      const t = el('IBSCBSTot', inf)
+      if (!t) return null
+      return { vBC: n(um(t, 'vBCIBSCBS')), vIBS: n(um(el('gIBS', t), 'vIBS')), vCBS: n(um(el('gCBS', t), 'vCBS')) }
+    })(),
     frete: um(transp, 'modFrete'),
     vol: { q: um(transp, 'qVol'), esp: um(transp, 'esp'), pb: um(transp, 'pesoB'), pl: um(transp, 'pesoL') },
     pagamentos: Array.from(inf.getElementsByTagNameNS('*', 'detPag')).map((p) => ({ tPag: um(p, 'tPag'), valor: n(um(p, 'vPag')) })),
@@ -86,6 +91,7 @@ export function htmlDanfe(d, extra = {}) {
   <h3>Cálculo do imposto</h3>
   <div class="row">${c('Base de cálculo do ICMS', v2(d.tot.vBC))}${c('Valor do ICMS', v2(d.tot.vICMS))}${c('Valor total dos produtos', v2(d.tot.vProd))}${c('Valor do PIS', v2(d.tot.vPIS))}${c('Valor da COFINS', v2(d.tot.vCOFINS))}</div>
   <div class="row">${c('Valor do frete', v2(d.tot.vFrete))}${c('Valor do seguro', v2(d.tot.vSeg))}${c('Desconto', v2(d.tot.vDesc))}${c('Outras despesas', v2(d.tot.vOutro))}${c('Valor do IPI', v2(d.tot.vIPI))}${c('Valor total da nota', v2(d.tot.vNF))}</div>
+  ${d.ibscbs ? `<div class="row">${c('Base de cálculo do IBS/CBS', v2(d.ibscbs.vBC))}${c('Valor do IBS', v2(d.ibscbs.vIBS))}${c('Valor da CBS', v2(d.ibscbs.vCBS))}</div>` : ''}
   <h3>Transportador / volumes transportados</h3>
   <div class="row">${c('Modalidade do frete', FRETE[d.frete] ?? esc(d.frete))}${c('Quantidade', esc(d.vol.q))}${c('Espécie', esc(d.vol.esp))}${c('Peso bruto', esc(d.vol.pb))}${c('Peso líquido', esc(d.vol.pl))}</div>
   <h3>Dados dos produtos / serviços</h3>
