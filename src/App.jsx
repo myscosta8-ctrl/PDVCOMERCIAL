@@ -27,6 +27,7 @@ import Relatorios from './pages/Relatorios.jsx'
 import Comandas from './pages/Comandas.jsx'
 import Cozinha from './pages/Cozinha.jsx'
 import OrdensServico from './pages/OrdensServico.jsx'
+import ListasCompra from './pages/ListasCompra.jsx'
 
 const TELAS = [
   { id: 'inicio', grupo: 'vender', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
@@ -39,6 +40,7 @@ const TELAS = [
   { id: 'clientes', grupo: 'vender', nome: 'Clientes', icone: 'usuario', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'produtos', grupo: 'estoque', nome: 'Produtos', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'precos', grupo: 'estoque', nome: 'Preços e promoções', icone: 'dinheiro', papeis: ['administrador', 'gerente'] },
+  { id: 'compras', grupo: 'estoque', nome: 'Listas de compras', icone: 'nota', papeis: ['administrador', 'gerente'] },
   { id: 'entradas', grupo: 'estoque', nome: 'Entrada de mercadorias', icone: 'estoque', papeis: ['administrador', 'gerente'] },
   { id: 'estoque', grupo: 'estoque', nome: 'Inventário', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'financeiro', grupo: 'gestao', nome: 'Financeiro', icone: 'grafico', papeis: ['administrador', 'gerente'] },
@@ -206,6 +208,7 @@ function Painel() {
           {tela === 'orcamentos' && <Orcamentos irPara={ir} />}
           {tela === 'clientes' && <Clientes />}
           {tela === 'produtos' && <Produtos />}
+          {tela === 'compras' && perfil.papel !== 'operador' && <ListasCompra />}
           {tela === 'entradas' && perfil.papel !== 'operador' && <Entradas />}
           {tela === 'precos' && perfil.papel !== 'operador' && <Precos />}
           {tela === 'estoque' && <Estoque />}

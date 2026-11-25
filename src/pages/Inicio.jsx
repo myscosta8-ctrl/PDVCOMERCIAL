@@ -131,7 +131,10 @@ export default function Inicio({ irPara }) {
         <section className="cartao">
           <div className="flex items-baseline justify-between px-5 pt-4">
             <h2 className="titulo-secao">Estoque baixo</h2>
-            {p.qtd_estoque_baixo > 0 && <Etiqueta tom="alerta">{p.qtd_estoque_baixo}</Etiqueta>}
+            <span className="flex items-center gap-2">
+              {p.qtd_estoque_baixo > 0 && <button type="button" className="text-sm font-semibold text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => irPara('compras')}>Montar lista de compras</button>}
+              {p.qtd_estoque_baixo > 0 && <Etiqueta tom="alerta">{p.qtd_estoque_baixo}</Etiqueta>}
+            </span>
           </div>
           {p.estoque_baixo.length === 0 ? <Vazio icone="estoque" titulo="Estoque em dia" texto="Nenhum produto abaixo do mínimo definido." /> : (
             <ul className="mt-2 divide-y divide-papel-200 dark:divide-noite-700">

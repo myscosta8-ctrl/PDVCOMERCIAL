@@ -161,7 +161,29 @@ const OS_ITENS = [
   { id: 'oi9', os_id: 'o5', produto_id: 'p23', descricao: 'Conector de carga', quantidade: 1, preco_unitario: 25, produto: { servico: false } },
 ]
 
+const LISTAS_COMPRA = [
+  { id: 'lc3', numero: 3, nome: 'Reposição da semana', fornecedor_id: 'f1', status: 'aberta', observacoes: 'Entregar até sexta; boleto 28 dias', criado_em: h(9, 40) },
+  { id: 'lc2', numero: 2, nome: 'Material de limpeza e escritório', fornecedor_id: null, status: 'enviada', observacoes: null, criado_em: '2026-11-21T13:10:00Z' },
+  { id: 'lc1', numero: 1, nome: 'Compras de 14/11', fornecedor_id: 'f1', status: 'concluida', observacoes: null, criado_em: '2026-11-14T12:00:00Z' },
+]
+const LISTA_COMPRA_ITENS = [
+  { id: 'li1', lista_id: 'lc3', produto_id: 'p4', descricao: 'Álcool etílico 70%, 1 litro', unidade: 'FR', quantidade: 16, custo_estimado: 7.2, comprado: false, origem: 'estoque', criado_em: h(9, 41), produto: { estoque_atual: 0, estoque_minimo: 8 } },
+  { id: 'li2', lista_id: 'lc3', produto_id: 'p2', descricao: 'Paracetamol 750 mg, 20 comprimidos', unidade: 'UN', quantidade: 30, custo_estimado: 4.8, comprado: false, origem: 'estoque', criado_em: h(9, 41), produto: { estoque_atual: 12, estoque_minimo: 15 } },
+  { id: 'li3', lista_id: 'lc3', produto_id: 'p1', descricao: 'Dipirona Monoidratada 500 mg, 10 comprimidos', unidade: 'UN', quantidade: 50, custo_estimado: 2.35, comprado: true, origem: 'manual', criado_em: h(9, 42), produto: { estoque_atual: 84, estoque_minimo: 20 } },
+  { id: 'li4', lista_id: 'lc3', produto_id: null, descricao: 'Sacolas plásticas médias', unidade: 'PCT', quantidade: 5, custo_estimado: null, comprado: false, origem: 'manual', criado_em: h(9, 43), produto: null },
+  { id: 'li5', lista_id: 'lc2', produto_id: null, descricao: 'Água sanitária 2 litros', unidade: 'UN', quantidade: 6, custo_estimado: 6.5, comprado: false, origem: 'manual', criado_em: '2026-11-21T13:11:00Z', produto: null },
+  { id: 'li6', lista_id: 'lc2', produto_id: null, descricao: 'Bobina para impressora térmica 80 mm', unidade: 'CX', quantidade: 2, custo_estimado: 58, comprado: false, origem: 'manual', criado_em: '2026-11-21T13:12:00Z', produto: null },
+  { id: 'li7', lista_id: 'lc1', produto_id: 'p3', descricao: 'Soro fisiológico 0,9%, 500 ml', unidade: 'FR', quantidade: 40, custo_estimado: 3.9, comprado: true, origem: 'estoque', criado_em: '2026-11-14T12:01:00Z', produto: { estoque_atual: 46, estoque_minimo: 10 } },
+]
+const SUGESTAO_COMPRA = [
+  { produto_id: 'p4', descricao: 'Álcool etílico 70%, 1 litro', unidade: 'FR', estoque_atual: 0, estoque_minimo: 8, vendido: 42, media_dia: 1.4, sugerida: 21, motivo: 'zerado', custo: 7.2, fornecedor_id: 'f1' },
+  { produto_id: 'p2', descricao: 'Paracetamol 750 mg, 20 comprimidos', unidade: 'UN', estoque_atual: 12, estoque_minimo: 15, vendido: 51, media_dia: 1.7, sugerida: 14, motivo: 'consumo', custo: 4.8, fornecedor_id: 'f1' },
+  { produto_id: 'pv2', descricao: 'Meia esportiva cano médio Branca G', unidade: 'UN', estoque_atual: 0, estoque_minimo: 2, vendido: 3, media_dia: 0.1, sugerida: 2, motivo: 'zerado', custo: 7.5, fornecedor_id: null },
+  { produto_id: 'p6', descricao: 'Protetor solar FPS 50, 120 ml', unidade: 'UN', estoque_atual: 7, estoque_minimo: 6, vendido: 39, media_dia: 1.3, sugerida: 13, motivo: 'consumo', custo: 31, fornecedor_id: 'f1' },
+]
+
 const TABELAS = {
+  listas_compra: LISTAS_COMPRA, lista_compra_itens: LISTA_COMPRA_ITENS,
   ordens_servico: ORDENS, os_itens: OS_ITENS,
   mesas: MESAS, comandas: COMANDAS, comanda_itens: COMANDA_ITENS,
   usuarios: [{ id: 'u1', nome: 'Carlos Lima', papel: 'administrador', empresa: EMP, ativo: true }, { id: 'u2', nome: 'Naldo Pereira', papel: 'operador', empresa: EMP, ativo: true }],
@@ -538,6 +560,7 @@ export const clienteDemo = {
         return { produto_id: i.produto_id, preco: promo?.preco ?? p.preco_venda, preco_base: p.preco_venda, origem: promo?.origem ?? 'base', nome: promo?.nome ?? null }
       }), error: null }
     }
+    if (nome === 'sugestao_compra') return { data: SUGESTAO_COMPRA.filter((x) => (args.p_cobertura > 0 ? true : x.estoque_atual <= x.estoque_minimo)).map((x) => (args.p_cobertura > 0 ? x : { ...x, sugerida: Math.max(x.estoque_minimo - x.estoque_atual, 0), motivo: x.estoque_atual <= 0 ? 'zerado' : 'minimo' })).filter((x) => !args.p_fornecedor || x.fornecedor_id === args.p_fornecedor), error: null }
     if (nome === 'fluxo_caixa') return { data: fluxoDemo(args), error: null }
     if (nome === 'dre') return { data: dreDemo(args), error: null }
     if (nome === 'relatorio_gerencial') return { data: relGerencialDemo(args), error: null }
