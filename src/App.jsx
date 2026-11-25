@@ -26,6 +26,7 @@ import Revenda from './pages/Revenda.jsx'
 import Relatorios from './pages/Relatorios.jsx'
 import Comandas from './pages/Comandas.jsx'
 import Cozinha from './pages/Cozinha.jsx'
+import OrdensServico from './pages/OrdensServico.jsx'
 
 const TELAS = [
   { id: 'inicio', grupo: 'vender', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
@@ -33,6 +34,7 @@ const TELAS = [
   { id: 'comandas', grupo: 'vender', nome: 'Mesas e comandas', icone: 'mesa', papeis: ['administrador', 'gerente', 'operador'], segmento: 'restaurante' },
   { id: 'cozinha', grupo: 'vender', nome: 'Cozinha', icone: 'relogio', papeis: ['administrador', 'gerente', 'operador'], segmento: 'restaurante' },
   { id: 'caixa', grupo: 'vender', nome: 'Caixa', icone: 'caixa', papeis: ['administrador', 'gerente', 'operador'] },
+  { id: 'os', grupo: 'vender', nome: 'Ordens de serviço', icone: 'configuracoes', papeis: ['administrador', 'gerente', 'operador'], segmento: ['servicos', 'varejo', 'outro'] },
   { id: 'orcamentos', grupo: 'vender', nome: 'Orçamentos', icone: 'nota', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'clientes', grupo: 'vender', nome: 'Clientes', icone: 'usuario', papeis: ['administrador', 'gerente', 'operador'] },
   { id: 'produtos', grupo: 'estoque', nome: 'Produtos', icone: 'produtos', papeis: ['administrador', 'gerente', 'operador'] },
@@ -103,7 +105,7 @@ function Principal() {
 
 function Painel() {
   const perfil = useSessao()
-  const telas = TELAS.filter((t) => (t.revendedor ? perfil.revendedor : t.papeis.includes(perfil.papel)) && (!t.segmento || t.segmento === perfil.empresa.segmento))
+  const telas = TELAS.filter((t) => (t.revendedor ? perfil.revendedor : t.papeis.includes(perfil.papel)) && (!t.segmento || [].concat(t.segmento).includes(perfil.empresa.segmento)))
   const [tela, setTela] = useState(() => {
     let salva
     try { salva = localStorage.getItem('tela') } catch {}
@@ -200,6 +202,7 @@ function Painel() {
           {tela === 'caixa' && <Caixa />}
           {tela === 'comandas' && <Comandas />}
           {tela === 'cozinha' && <Cozinha />}
+          {tela === 'os' && <OrdensServico />}
           {tela === 'orcamentos' && <Orcamentos irPara={ir} />}
           {tela === 'clientes' && <Clientes />}
           {tela === 'produtos' && <Produtos />}

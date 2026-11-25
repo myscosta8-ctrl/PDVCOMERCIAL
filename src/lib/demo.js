@@ -139,9 +139,32 @@ const COMANDA_ITENS = [
   CI('i11', 'c4', 'Água mineral', 3, 4, false, 'entregue', 6), CI('i12', 'c5', 'X-salada', 1, 18, true, 'pendente', 3, 'Sem cebola'),
 ]
 
+const dia = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+const OS = (id, numero, status, cliente_nome, cliente_telefone, equipamento, marca, modelo, defeito, previsao, extra = {}) => ({ id, numero, status, cliente_nome, cliente_telefone, equipamento, marca, modelo,
+  numero_serie: null, acessorios: null, defeito, diagnostico: null, solucao: null, observacoes: null, previsao, garantia_dias: 90, tecnico_id: 'u1', criado_em: min(60 * 24 * (40 - numero)), ...extra })
+const ORDENS = [
+  OS('o1', 31, 'aberta', 'Josiane Ferreira', '91988110022', 'Notebook', 'Marca A', 'Linha 15', 'Não liga depois de queda', dia(2)),
+  OS('o2', 30, 'aguardando_aprovacao', 'Ronaldo Pinheiro', '91991230045', 'Celular', 'Marca B', 'Modelo S', 'Tela quebrada, touch falhando', dia(1), { diagnostico: 'Display e touch danificados; bateria em bom estado.' }),
+  OS('o3', 29, 'aprovada', 'Clínica Bem Estar', '9137412200', 'Impressora térmica', 'Marca C', 'T80', 'Não puxa o papel', dia(-1), { diagnostico: 'Rolete de tração gasto.', tecnico_id: 'u2' }),
+  OS('o4', 28, 'pronta', 'Edileusa Monteiro', '91984450011', 'Ar-condicionado split', 'Marca D', '12.000 BTU', 'Não gela', dia(0), { diagnostico: 'Falta de gás e filtro sujo.', solucao: 'Carga de gás, limpeza completa e troca do capacitor.', numero_serie: 'SN-88213', acessorios: 'Controle remoto' }),
+  OS('o5', 27, 'entregue', 'Paulo Henrique', '91999001122', 'Celular', 'Marca B', 'Modelo A', 'Conector de carga solto', dia(-3), { entregue_em: min(60 * 24 * 2) }),
+]
+const OS_ITENS = [
+  { id: 'oi1', os_id: 'o2', produto_id: 's1', descricao: 'Mão de obra: troca de tela', quantidade: 1, preco_unitario: 90, produto: { servico: true } },
+  { id: 'oi2', os_id: 'o2', produto_id: 'p20', descricao: 'Tela completa (display + touch)', quantidade: 1, preco_unitario: 280, produto: { servico: false } },
+  { id: 'oi3', os_id: 'o3', produto_id: 's2', descricao: 'Mão de obra: manutenção de impressora', quantidade: 1, preco_unitario: 70, produto: { servico: true } },
+  { id: 'oi4', os_id: 'o3', produto_id: 'p21', descricao: 'Rolete de tração', quantidade: 1, preco_unitario: 45, produto: { servico: false } },
+  { id: 'oi5', os_id: 'o4', produto_id: 's3', descricao: 'Limpeza completa de split', quantidade: 1, preco_unitario: 150, produto: { servico: true } },
+  { id: 'oi6', os_id: 'o4', produto_id: 's4', descricao: 'Carga de gás R410A', quantidade: 1, preco_unitario: 220, produto: { servico: true } },
+  { id: 'oi7', os_id: 'o4', produto_id: 'p22', descricao: 'Capacitor 35 µF', quantidade: 1, preco_unitario: 38, produto: { servico: false } },
+  { id: 'oi8', os_id: 'o5', produto_id: 's5', descricao: 'Mão de obra: troca de conector', quantidade: 1, preco_unitario: 60, produto: { servico: true } },
+  { id: 'oi9', os_id: 'o5', produto_id: 'p23', descricao: 'Conector de carga', quantidade: 1, preco_unitario: 25, produto: { servico: false } },
+]
+
 const TABELAS = {
+  ordens_servico: ORDENS, os_itens: OS_ITENS,
   mesas: MESAS, comandas: COMANDAS, comanda_itens: COMANDA_ITENS,
-  usuarios: [{ id: 'u1', nome: 'Carlos Lima', papel: 'administrador', empresa: EMP }],
+  usuarios: [{ id: 'u1', nome: 'Carlos Lima', papel: 'administrador', empresa: EMP, ativo: true }, { id: 'u2', nome: 'Naldo Pereira', papel: 'operador', empresa: EMP, ativo: true }],
   empresas: [EMP],
   produtos: PRODUTOS,
   categorias: [{ id: 'k1', nome: 'Medicamentos' }, { id: 'k2', nome: 'Higiene e beleza' }, { id: 'k3', nome: 'Infantil' }],

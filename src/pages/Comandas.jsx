@@ -331,7 +331,7 @@ function DetalheComanda({ id, mesas, comandas, onFechar, onMudou }) {
       onCancelar={() => setAcao(null)}
       onConfirmar={async () => { if (await executar('cancelar_comanda', { p_comanda: c.id, p_motivo: motivo }, 'Comanda cancelada.')) { setAcao(null); onMudou(); onFechar() } }} />
 
-    {pagar && <Pagamento caixa={caixa} itens={pagar} cliente={null} tabela={null} cfg={cfg} fechar={{ comanda: c.id }} onFechar={() => setPagar(null)} onConcluir={concluida} />}
+    {pagar && <Pagamento caixa={caixa} itens={pagar} cliente={null} tabela={null} cfg={cfg} fechar={{ rpc: 'fechar_comanda', args: { p_comanda: c.id } }} onFechar={() => setPagar(null)} onConcluir={concluida} />}
   </>)
 }
 

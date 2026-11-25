@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { montarInfNFe } from '../../supabase/functions/nfce/xml.ts'
+import { montarInfNFe, pagamentosProporcionais } from '../../supabase/functions/nfce/xml.ts'
 
 const base = (crt, item) => ({
   emitente: { cnpj: '12345678000195', ie: '151234567', razao_social: 'Loja Teste Ltda', crt, uf: 'PA', municipio_ibge: '1501808',
@@ -36,5 +36,15 @@ describe('NFC-e: tributação pela regra', () => {
     const { infNFe } = montarInfNFe(d)
     expect(infNFe).toContain('<detPag><tPag>03</tPag><vPag>60.00</vPag><card><tpIntegra>2</tpIntegra><CNPJ>01027058000191</CNPJ><tBand>02</tBand><cAut>A1B2</cAut></card></detPag>')
     expect(infNFe).toContain('<detPag><tPag>04</tPag><vPag>30.00</vPag><card><tpIntegra>2</tpIntegra></card></detPag>')
+  })
+  it('venda com serviço: pagamentos e troco proporcionais às mercadorias', () => {
+    // Venda de 270 (150 em peça + 120 de serviço), paga com 200 no PIX e 100 em dinheiro (troco 30)
+    const r = pagamentosProporcionais([{ forma: 'pix', valor: 200 }, { forma: 'dinheiro', valor: 100 }], 30, 270, 150)
+    const soma = r.pagamentos.reduce((s, p) => s + p.valor, 0)
+    expect(Math.round((soma - r.troco) * 100) / 100).toBe(150)
+    expect(r.troco).toBeCloseTo(16.67)
+    expect(pagamentosProporcionais([{ forma: 'pix', valor: 50 }], 0, 50, 50).pagamentos[0].valor).toBe(50)
+    const centavos = pagamentosProporcionais([{ forma: 'pix', valor: 33.33 }, { forma: 'debito', valor: 33.33 }, { forma: 'credito', valor: 33.34 }], 0, 100, 10.01)
+    expect(Math.round(centavos.pagamentos.reduce((s, p) => s + p.valor, 0) * 100) / 100).toBe(10.01)
   })
 })

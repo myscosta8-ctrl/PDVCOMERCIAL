@@ -20,7 +20,7 @@ export const LISTAS_CONTROLE = [
 const VAZIO = {
   descricao: '', codigo: '', ean: '', unidade: 'UN', preco_venda: '', preco_custo: '', estoque_minimo: '',
   categoria_id: null, ncm: '', cest: '', cfop: '5102', origem: 0, csosn: '102', cst_icms: '', controla_lote: false,
-  registro_ms: '', controlado: false, lista_controle: null, codigo_balanca: '', ativo: true, markup: '', e_kit: false, componentes: [], cozinha: false,
+  registro_ms: '', controlado: false, lista_controle: null, codigo_balanca: '', ativo: true, markup: '', e_kit: false, componentes: [], cozinha: false, servico: false,
 }
 const UNIDADES = ['UN', 'CX', 'FR', 'CP', 'KG', 'G', 'L', 'ML', 'M', 'PCT', 'PAR'].map((u) => ({ valor: u, texto: u }))
 const ORIGENS = [
@@ -40,7 +40,7 @@ const FILTROS = [
   { id: 'inativos', nome: 'Inativos' },
 ]
 const ncmValido = (p) => /^\d{8}$/.test(p.ncm ?? '')
-const estoqueBaixo = (p) => p.ativo && !p.e_kit && !p.e_grade && Number(p.estoque_atual) <= Number(p.estoque_minimo)
+const estoqueBaixo = (p) => p.ativo && !p.e_kit && !p.e_grade && !p.servico && Number(p.estoque_atual) <= Number(p.estoque_minimo)
 
 export default function Produtos() {
   const perfil = useSessao()
@@ -118,7 +118,8 @@ export default function Produtos() {
     if (p.markup != null && (Number.isNaN(p.markup) || p.markup < 0)) { avisar('Markup inválido.', 'erro'); return }
     const componentes = p.componentes ?? []
     if (p.e_kit && !componentes.length) { avisar('Inclua os produtos que compõem o kit.', 'erro'); return }
-    if (p.e_kit) p.controla_lote = false
+    if (p.e_kit || p.servico) p.controla_lote = false
+    if (p.servico && p.e_kit) { avisar('Um serviço não pode ser kit.', 'erro'); return }
     delete p.estoque_atual; delete p.empresa_id; delete p.criado_em; delete p.atualizado_em; delete p.componentes; delete p.e_grade; delete p.produto_pai_id; delete p.atributos
     setEnviando(true)
     const r = p.id ? await supabase.from('produtos').update(p).eq('id', p.id).select('id').single() : await supabase.from('produtos').insert(p).select('id').single()
@@ -231,7 +232,7 @@ export default function Produtos() {
                       <td className="num text-right text-tinta-600 dark:text-tinta-300">{dinheiro(p.preco_custo)}</td>
                       <td className="num text-right font-semibold">{dinheiro(p.preco_venda)}</td>
                       <td className={`num text-right ${mg === null ? 'text-tinta-300' : mg < 15 ? 'text-ambar-600 dark:text-ambar-300' : 'text-caixa-600 dark:text-caixa-300'}`}>{mg === null ? '—' : `${mg.toFixed(1).replace('.', ',')}%`}</td>
-                      <td className={`num text-right font-semibold ${p.e_kit || p.e_grade ? '' : Number(p.estoque_atual) <= 0 ? 'text-rubro-600' : estoqueBaixo(p) ? 'text-ambar-600' : ''}`}>{p.e_grade ? <>{estoqueGrade[p.id] ?? 0} <span className="font-sans text-xs font-normal text-tinta-400">na grade</span></> : p.e_kit ? <span className="font-sans text-sm font-normal text-tinta-400">pelos componentes</span> : <>{Number(p.estoque_atual)} <span className="font-sans text-xs font-normal text-tinta-400">{p.unidade}</span></>}</td>
+                      <td className={`num text-right font-semibold ${p.e_kit || p.e_grade ? '' : Number(p.estoque_atual) <= 0 ? 'text-rubro-600' : estoqueBaixo(p) ? 'text-ambar-600' : ''}`}>{p.servico ? <span className="font-sans text-sm font-normal text-tinta-400">serviço</span> : p.e_grade ? <>{estoqueGrade[p.id] ?? 0} <span className="font-sans text-xs font-normal text-tinta-400">na grade</span></> : p.e_kit ? <span className="font-sans text-sm font-normal text-tinta-400">pelos componentes</span> : <>{Number(p.estoque_atual)} <span className="font-sans text-xs font-normal text-tinta-400">{p.unidade}</span></>}</td>
                       <td>
                         <div className="flex flex-wrap gap-1">
                           {!p.ativo && <Etiqueta>Inativo</Etiqueta>}
@@ -358,6 +359,7 @@ export default function Produtos() {
               </fieldset>
             )}
 
+            <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={!!edicao.servico} onChange={m('servico')} disabled={edicao.e_kit || edicao.e_grade || !!edicao.produto_pai_id || (!!edicao.id && Number(edicao.estoque_atual) !== 0 && !edicao.servico)} /> É um serviço (mão de obra: não controla estoque e não sai na NFC-e)</label>
             {restaurante && <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={!!edicao.cozinha} onChange={m('cozinha')} /> Preparado na cozinha (aparece na tela da cozinha quando lançado na comanda)</label>}
             <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={edicao.ativo} onChange={m('ativo')} /> Produto ativo para venda</label>
           </div>

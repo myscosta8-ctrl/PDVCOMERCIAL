@@ -9,7 +9,7 @@
 //   MDF-e: { acao: "mdfe_emitir" | "mdfe_consultar", mdfe_id } | { acao: "mdfe_encerrar", mdfe_id, uf, municipio } | { acao: "mdfe_cancelar", mdfe_id, justificativa }
 //   NF-e modelo 55: { acao: "nfe_emitir" | "nfe_consultar", nfe_id } | { acao: "nfe_cancelar", nfe_id, justificativa } | { acao: "nfe_cce", nfe_id, correcao }
 import { createClient } from "@supabase/supabase-js";
-import { montarInfNFe, montarQrCode, montarInfNFeSupl, ratearDesconto, NS_NFE, UF_CODIGO, type ItemNota } from "./xml.ts";
+import { montarInfNFe, montarQrCode, montarInfNFeSupl, ratearDesconto, pagamentosProporcionais, arred, NS_NFE, UF_CODIGO, type ItemNota } from "./xml.ts";
 import { montarInfNFe55, type Destinatario } from "./nfe55.ts";
 import { lerPfx, assinar, assinarTexto, type Certificado } from "./assinatura.ts";
 import { enviar, enviarAN, enviarMDFe, statusServico, valor, bloco } from "./sefaz.ts";
@@ -115,16 +115,28 @@ async function testar(empresaId: string) {
 interface Montagem { numero: number; codigo: string; emissao: Date; contingencia?: { inicio: Date; justificativa: string } | null }
 
 async function montarNota(empresa: Record<string, any>, venda: Record<string, any>, cert: Certificado, csc: string, m: Montagem) {
-  const [{ data: itens }, { data: pagamentos }] = await Promise.all([
+  const [{ data: todos }, { data: pagamentos }] = await Promise.all([
     servico.from("venda_itens")
-      .select("sequencia, quantidade, preco_unitario, desconto, descricao, cfop, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, origem, ncm, cest, cbenef, produto:produtos(id, codigo, ean, ncm, cest, cfop, unidade, origem, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cbenef, cst_ibscbs, cclasstrib, reducao_ibscbs)")
+      .select("sequencia, quantidade, preco_unitario, desconto, descricao, cfop, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, origem, ncm, cest, cbenef, produto:produtos(id, codigo, ean, ncm, cest, cfop, unidade, origem, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cbenef, cst_ibscbs, cclasstrib, reducao_ibscbs, servico)")
       .eq("venda_id", venda.id).order("sequencia"),
     servico.from("venda_pagamentos").select("forma, valor, bandeira, autorizacao, credenciadora_cnpj").eq("venda_id", venda.id),
   ]);
-  if (!itens?.length) throw new ErroUsuario("Venda sem itens.");
-  const descontos = ratearDesconto(
-    itens.map((i) => ({ bruto: Math.round(Number(i.quantidade) * Number(i.preco_unitario) * 100) / 100, desconto: Number(i.desconto) })),
+  if (!todos?.length) throw new ErroUsuario("Venda sem itens.");
+  const descontosTodos = ratearDesconto(
+    todos.map((i) => ({ bruto: Math.round(Number(i.quantidade) * Number(i.preco_unitario) * 100) / 100, desconto: Number(i.desconto) })),
     Number(venda.desconto),
+  );
+  // Serviços não saem na NFC-e (a nota de serviço é municipal)
+  const ehServico = (i: Record<string, any>) => Boolean((i.produto as Record<string, unknown> | null)?.servico);
+  const itens = todos.filter((i) => !ehServico(i));
+  const descontos = descontosTodos.filter((_, k) => !ehServico(todos[k]));
+  if (!itens.length) throw new ErroUsuario("Esta venda tem só serviços, que não saem na NFC-e. Emita a nota fiscal de serviço (NFS-e) pela prefeitura.");
+  const liquido = (i: Record<string, any>, d: number) => arred(Number(i.quantidade) * Number(i.preco_unitario) - d);
+  const valorServicos = arred(todos.reduce((s, i, k) => s + (ehServico(i) ? liquido(i, descontosTodos[k]) : 0), 0));
+  const totalNota = arred(itens.reduce((s, i, k) => s + liquido(i, descontos[k]), 0));
+  const pags = pagamentosProporcionais(
+    (pagamentos ?? []).map((p) => ({ forma: p.forma, valor: Number(p.valor), bandeira: p.bandeira, autorizacao: p.autorizacao, credenciadora_cnpj: p.credenciadora_cnpj })),
+    Number(venda.troco), Number(venda.total), totalNota,
   );
   const ambiente = Number(empresa.nfce_ambiente) as 1 | 2;
   const montado = montarInfNFe({
@@ -149,8 +161,9 @@ async function montarNota(empresa: Record<string, any>, venda: Record<string, an
         cst_ibscbs: f("cst_ibscbs"), cclasstrib: f("cclasstrib"), reducao_ibscbs: Number(f("reducao_ibscbs") ?? 0),
       };
     }),
-    pagamentos: (pagamentos ?? []).map((p) => ({ forma: p.forma, valor: Number(p.valor), bandeira: p.bandeira, autorizacao: p.autorizacao, credenciadora_cnpj: p.credenciadora_cnpj })),
-    troco: Number(venda.troco),
+    pagamentos: pags.pagamentos,
+    troco: pags.troco,
+    informacoes: valorServicos > 0 ? `Serviços prestados nesta venda (R$ ${valorServicos.toFixed(2).replace(".", ",")}) não estão incluídos neste documento.` : null,
     cpf_cnpj_consumidor: venda.cpf_consumidor,
     aliquotasIBSCBS: empresa.ibscbs_aliquotas,
   });

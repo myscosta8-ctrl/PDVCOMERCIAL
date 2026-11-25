@@ -19,9 +19,31 @@ export async function chamarNfce(corpo) {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const chaveFormatada = (c) => String(c || '').replace(/(\d{4})/g, '$1 ').trim()
 
+const T_PAG_NOME = { '01': 'dinheiro', '03': 'credito', '04': 'debito', '05': 'crediario', '17': 'pix', '99': 'outro' }
+
+// Valores do DANFE lidos do próprio XML enviado à SEFAZ (itens, totais e pagamentos ficam iguais aos da nota,
+// inclusive quando a venda tem serviços, que não entram na NFC-e)
+export function dadosDoXml(xml) {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  if (doc.getElementsByTagName('parsererror').length) return null
+  const v = (no, nome) => no.getElementsByTagName(nome)[0]?.textContent ?? null
+  const n = (no, nome) => Number(v(no, nome) ?? 0)
+  const itens = [...doc.getElementsByTagName('det')].map((d, k) => ({
+    sequencia: k + 1, descricao: v(d, 'xProd'), quantidade: n(d, 'qCom'), preco_unitario: n(d, 'vUnCom'), total: Math.round((n(d, 'vProd') - n(d, 'vDesc')) * 100) / 100,
+  }))
+  const tot = doc.getElementsByTagName('ICMSTot')[0]
+  if (!tot) return null
+  const pagamentos = [...doc.getElementsByTagName('detPag')].map((p) => ({ forma: T_PAG_NOME[v(p, 'tPag')] ?? 'outro', valor: n(p, 'vPag') }))
+  const pag = doc.getElementsByTagName('pag')[0]
+  return {
+    itens, pagamentos, subtotal: n(tot, 'vProd'), desconto: n(tot, 'vDesc'), total: n(tot, 'vNF'),
+    troco: pag ? n(pag, 'vTroco') : 0, informacoes: v(doc, 'infCpl'),
+  }
+}
+
 // Imprime o DANFE NFC-e na bobina configurada (58 ou 80 mm)
 export async function imprimirDanfe(vendaId) {
-  const [{ data: venda }, { data: itens }, { data: pags }, { data: doc }, { data: empresa }] = await Promise.all([
+  const [{ data: vendaBanco }, { data: itensBanco }, { data: pagsBanco }, { data: doc }, { data: empresa }] = await Promise.all([
     supabase.from('vendas').select('*').eq('id', vendaId).single(),
     supabase.from('venda_itens').select('*').eq('venda_id', vendaId).order('sequencia'),
     supabase.from('venda_pagamentos').select('*').eq('venda_id', vendaId),
@@ -29,6 +51,10 @@ export async function imprimirDanfe(vendaId) {
     supabase.from('empresas').select('*').single(),
   ])
   if (!doc) return { erro: 'Esta venda não tem NFC-e autorizada.' }
+  const doXml = doc.xml_enviado ? dadosDoXml(doc.xml_enviado) : null
+  const itens = doXml?.itens ?? itensBanco
+  const pags = doXml?.pagamentos ?? pagsBanco
+  const venda = doXml ? { ...vendaBanco, subtotal: doXml.subtotal, desconto: doXml.desconto, total: doXml.total, troco: doXml.troco } : vendaBanco
   const contingencia = doc.status === 'contingencia'
   const qr = await QRCode.toDataURL(doc.qrcode_url, { margin: 0, width: 220 })
   const e = empresa.endereco || {}
@@ -51,7 +77,7 @@ ${Number(venda.desconto) > 0 ? `<tr><td>Descontos</td><td class="r">-${dinheiro(
 ${pags.map((p) => `<tr><td>${FORMAS[p.forma] || p.forma}</td><td class="r">${dinheiro(p.valor)}</td></tr>`).join('')}
 ${Number(venda.troco) > 0 ? `<tr><td>Troco</td><td class="r">${dinheiro(venda.troco)}</td></tr>` : ''}
 </table><hr>
-<div class="c">Consulte pela chave de acesso em<br>${esc(empresa.nfce_url_consulta)}<br><span class="b">${chaveFormatada(doc.chave)}</span></div>
+${doXml?.informacoes ? `<div class="c">${esc(doXml.informacoes)}</div><hr>` : ''}<div class="c">Consulte pela chave de acesso em<br>${esc(empresa.nfce_url_consulta)}<br><span class="b">${chaveFormatada(doc.chave)}</span></div>
 <hr><div class="c">${venda.cpf_consumidor ? `CONSUMIDOR CPF/CNPJ: ${esc(venda.cpf_consumidor)}` : 'CONSUMIDOR NÃO IDENTIFICADO'}</div>
 <hr><div class="c b">NFC-e nº ${doc.numero} Série ${doc.serie} ${dataHora(doc.emitida_em)}</div>
 ${contingencia ? `<div class="c">Contingência desde ${dataHora(doc.dh_contingencia)}<br>${esc(doc.justificativa_contingencia)}</div>` : `<div class="c">Protocolo de autorização: ${esc(doc.protocolo)}<br>Data de autorização: ${dataHora(doc.emitida_em)}</div>`}

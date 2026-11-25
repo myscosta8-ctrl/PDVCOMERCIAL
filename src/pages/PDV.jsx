@@ -474,7 +474,7 @@ export default function PDV() {
   )
 }
 
-// fechar: { comanda } para fechar a conta de uma comanda (restaurante) em vez de uma venda do carrinho
+// fechar: { rpc, args } para concluir outro documento (comanda, ordem de serviço) em vez da venda do carrinho
 export function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir, fechar = null }) {
   const avisar = useAviso()
   const controlados = itens.filter((i) => i.controlado)
@@ -551,8 +551,8 @@ export function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConc
   const finalizar = async (rec = receita) => {
     if (controlados.length && !rec) { setPedirReceita('concluir'); return }
     setEnviando(true)
-    const { data, error } = await supabase.rpc(fechar ? 'fechar_comanda' : 'finalizar_venda', {
-      ...(fechar ? { p_comanda: fechar.comanda } : {}),
+    const { data, error } = await supabase.rpc(fechar?.rpc ?? 'finalizar_venda', {
+      ...(fechar?.args ?? {}),
       p_caixa: caixa.id,
       p_itens: paraEnvio(itens),
       p_pagamentos: pagamentos,

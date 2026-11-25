@@ -115,6 +115,19 @@ export function grupoCartao(p: PagamentoNota) {
   return tag("card", tag("tpIntegra", "2") + (cnpj.length === 14 ? tag("CNPJ", cnpj) : "") + (band ? tag("tBand", band) : "") + (aut ? tag("cAut", aut) : ""));
 }
 
+// Venda com serviços (que não saem na NFC-e): os pagamentos e o troco são reduzidos na proporção das mercadorias,
+// para a soma dos pagamentos menos o troco fechar exatamente com o total da nota.
+export function pagamentosProporcionais(pagamentos: PagamentoNota[], troco: number, totalVenda: number, totalNota: number) {
+  if (!(totalVenda > 0) || totalNota >= totalVenda) return { pagamentos, troco };
+  const r = totalNota / totalVenda;
+  const novos = pagamentos.map((p) => ({ ...p, valor: arred(p.valor * r) }));
+  const t = arred(troco * r);
+  const dif = arred(totalNota - (novos.reduce((s, p) => s + p.valor, 0) - t));
+  const maior = novos.reduce((m, p, i) => (p.valor > novos[m].valor ? i : m), 0);
+  novos[maior] = { ...novos[maior], valor: arred(novos[maior].valor + dif) };
+  return { pagamentos: novos.filter((p) => p.valor > 0), troco: t };
+}
+
 // Código do meio de pagamento (tabela tPag)
 export const T_PAG: Record<string, string> = { dinheiro: "01", credito: "03", debito: "04", crediario: "05", pix: "17", outro: "99" };
 
