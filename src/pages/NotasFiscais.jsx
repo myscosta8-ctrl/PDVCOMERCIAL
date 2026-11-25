@@ -33,7 +33,8 @@ export function itemDoProduto(p, finalidade, extra = {}) {
     produto_id: p.id, codigo: p.codigo || '', ean: p.ean || null, descricao: p.descricao, ncm: p.ncm || '', cest: p.cest || null, unidade: p.unidade || 'UN',
     quantidade: 1, valor_unitario: Number(p.preco_venda || 0), desconto: 0, cfop: cfopSugerido(p, finalidade), origem: p.origem ?? 0,
     csosn: p.csosn || null, cst_icms: p.cst_icms || null, aliquota_icms: Number(p.aliquota_icms || 0), reducao_bc: Number(p.reducao_bc || 0), cbenef: p.cbenef || null,
-    cst_pis: p.cst_pis || null, aliquota_pis: Number(p.aliquota_pis || 0), cst_cofins: p.cst_cofins || null, aliquota_cofins: Number(p.aliquota_cofins || 0), ...extra,
+    cst_pis: p.cst_pis || null, aliquota_pis: Number(p.aliquota_pis || 0), cst_cofins: p.cst_cofins || null, aliquota_cofins: Number(p.aliquota_cofins || 0),
+    cst_ibscbs: p.cst_ibscbs || null, cclasstrib: p.cclasstrib || null, reducao_ibscbs: Number(p.reducao_ibscbs || 0), ...extra,
   }
 }
 

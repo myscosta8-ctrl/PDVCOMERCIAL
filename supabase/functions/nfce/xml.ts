@@ -25,6 +25,7 @@ export interface ItemNota {
   aliquota_icms?: number | null; reducao_bc?: number | null; cbenef?: string | null;
   cst_pis?: string | null; aliquota_pis?: number | null; cst_cofins?: string | null; aliquota_cofins?: number | null;
   frete?: number; xPed?: string | null;
+  cst_ibscbs?: string | null; cclasstrib?: string | null; reducao_ibscbs?: number | null;
 }
 export interface PagamentoNota { forma: string; valor: number }
 export interface DadosNota {
@@ -33,6 +34,33 @@ export interface DadosNota {
   cpf_cnpj_consumidor?: string | null; informacoes?: string | null;
   // Contingência off-line (tpEmis = 9): início da contingência e motivo, impressos no DANFE
   contingencia?: { inicio: Date; justificativa: string } | null;
+  aliquotasIBSCBS?: Record<string, AliquotasIBSCBS> | null;
+}
+
+// ---------------------------------------------------------------- IBS e CBS (reforma tributária, LC 214/2025)
+// Em 2026 o destaque é de teste: CBS 0,9%, IBS estadual 0,1% e municipal 0%, sem somar ao total da nota.
+// Obrigatório para o regime normal (CRT 3) e o Simples com excesso de sublimite (CRT 2).
+export interface AliquotasIBSCBS { uf: number; mun: number; cbs: number }
+export const ALIQUOTAS_IBSCBS_PADRAO: Record<string, AliquotasIBSCBS> = { "2026": { uf: 0.1, mun: 0, cbs: 0.9 } };
+
+export function aliquotasIBSCBS(crt: number, emissao: Date, ajustes?: Record<string, AliquotasIBSCBS> | null): AliquotasIBSCBS | null {
+  if (crt !== 2 && crt !== 3) return null;
+  const ano = dataHoraBrasilia(emissao).slice(0, 4);
+  return ajustes?.[ano] ?? ALIQUOTAS_IBSCBS_PADRAO[ano] ?? null;
+}
+
+// CST com destaque (gIBSCBS) e CST só informativos (isenção, imunidade e não incidência)
+const CST_IBSCBS_COM_VALOR = new Set(["000", "200"]);
+const CST_IBSCBS_SEM_VALOR = new Set(["400", "410"]);
+
+export function totalIBSCBS(t: { vBC: number; vIBSUF: number; vIBSMun: number; vCBS: number }) {
+  const z = "0.00";
+  const vIBS = arred(t.vIBSUF + t.vIBSMun);
+  return tag("IBSCBSTot", tag("vBCIBSCBS", n2(arred(t.vBC))) +
+    tag("gIBS", tag("gIBSUF", tag("vDif", z) + tag("vDevTrib", z) + tag("vIBSUF", n2(arred(t.vIBSUF)))) +
+      tag("gIBSMun", tag("vDif", z) + tag("vDevTrib", z) + tag("vIBSMun", n2(arred(t.vIBSMun)))) +
+      tag("vIBS", n2(vIBS)) + tag("vCredPres", z) + tag("vCredPresCondSus", z)) +
+    tag("gCBS", tag("vDif", z) + tag("vDevTrib", z) + tag("vCBS", n2(arred(t.vCBS))) + tag("vCredPres", z) + tag("vCredPresCondSus", z)));
 }
 
 // Texto seguro para XML (forma canônica)
@@ -118,7 +146,7 @@ export function montarInfNFe(d: DadosNota) {
       tag("indIEDest", "9"));
   }
 
-  const it = montarItens(d.itens, e.crt, homolog ? TEXTO_HOMOLOGACAO : null);
+  const it = montarItens(d.itens, e.crt, homolog ? TEXTO_HOMOLOGACAO : null, undefined, aliquotasIBSCBS(e.crt, d.emissao, d.aliquotasIBSCBS));
   let { vProd, vDesc } = it;
   const { dets, vBCTot, vICMSTot, vPISTot, vCOFINSTot } = it;
 
@@ -129,7 +157,7 @@ export function montarInfNFe(d: DadosNota) {
     tag("vBC", n2(arred(vBCTot))) + tag("vICMS", n2(arred(vICMSTot))) + tag("vICMSDeson", z) + tag("vFCP", z) + tag("vBCST", z) + tag("vST", z) +
     tag("vFCPST", z) + tag("vFCPSTRet", z) + tag("vProd", n2(vProd)) + tag("vFrete", z) + tag("vSeg", z) +
     tag("vDesc", n2(vDesc)) + tag("vII", z) + tag("vIPI", z) + tag("vIPIDevol", z) + tag("vPIS", n2(arred(vPISTot))) +
-    tag("vCOFINS", n2(arred(vCOFINSTot))) + tag("vOutro", z) + tag("vNF", n2(vNF))));
+    tag("vCOFINS", n2(arred(vCOFINSTot))) + tag("vOutro", z) + tag("vNF", n2(vNF))) + (it.ibscbs ? totalIBSCBS(it.ibscbs) : ""));
 
   const pag = tag("pag", d.pagamentos.map((p) => {
     const t = T_PAG[p.forma] ?? "99";
@@ -151,10 +179,14 @@ export function montarInfNFe(d: DadosNota) {
 // Itens (det) com ICMS, PIS e COFINS; usado pela NFC-e (65) e pela NF-e (55).
 // textoPrimeiro: na NFC-e de homologação, a descrição do 1º item é substituída pelo texto obrigatório.
 // extra: grupos opcionais no fim de <imposto> (ex.: ICMSUFDest do DIFAL), recebe o item e a base (valor - desconto + frete)
+// extra pode devolver { xml, deduzir }: valor a tirar da base do IBS/CBS (ex.: DIFAL)
+// ibscbs: alíquotas do ano; quando informado, cada item leva o grupo IBSCBS.
 export function montarItens(itens: ItemNota[], crt: number, textoPrimeiro: string | null = null,
-  extra?: (it: ItemNota, base: number, i: number) => string) {
+  extra?: (it: ItemNota, base: number, i: number) => string | { xml: string; deduzir?: number },
+  ibscbs?: AliquotasIBSCBS | null) {
   const e = { crt };
   let vProd = 0, vDesc = 0, vBCTot = 0, vICMSTot = 0, vPISTot = 0, vCOFINSTot = 0, vFreteTot = 0;
+  const rt = { vBC: 0, vIBSUF: 0, vIBSMun: 0, vCBS: 0 };
   const dets = itens.map((it, i) => {
     const bruto = arred(it.quantidade * it.valor_unitario);
     const frete = arred(Number(it.frete || 0));
@@ -172,6 +204,7 @@ export function montarItens(itens: ItemNota[], crt: number, textoPrimeiro: strin
       tag("indTot", "1") + (it.xPed ? tag("xPed", txt(it.xPed, 15)) : "");
 
     let icms: string;
+    const icmsAntes = vICMSTot, pisAntes = vPISTot, cofinsAntes = vCOFINSTot;
     if (e.crt === 1 || e.crt === 4) {
       const csosn = it.csosn || "102";
       if (csosn === "900") {
@@ -215,10 +248,40 @@ export function montarItens(itens: ItemNota[], crt: number, textoPrimeiro: strin
     };
     const pis = contrib("PIS", it.cst_pis, it.aliquota_pis);
     const cofins = contrib("COFINS", it.cst_cofins, it.aliquota_cofins);
-    const adicional = extra ? extra(it, arred(bruto - it.desconto + frete), i) : "";
-    return `<det nItem="${i + 1}">` + tag("prod", prod) + tag("imposto", tag("ICMS", icms) + pis + cofins + adicional) + `</det>`;
+    const r = extra ? extra(it, arred(bruto - it.desconto + frete), i) : "";
+    const adicional = typeof r === "string" ? r : r.xml;
+    const deduzir = typeof r === "string" ? 0 : Number(r.deduzir || 0);
+    let ibs = "";
+    if (ibscbs) {
+      const cst = String(it.cst_ibscbs || "000");
+      const ccl = String(it.cclasstrib || (cst === "000" ? "000001" : ""));
+      if (!/^\d{3}$/.test(cst) || !/^\d{6}$/.test(ccl) || ccl.slice(0, 3) !== cst) {
+        throw new Error(`IBS/CBS: CST ${cst} e classificação ${ccl || "(vazia)"} não combinam no produto "${it.descricao}".`);
+      }
+      if (CST_IBSCBS_SEM_VALOR.has(cst)) {
+        ibs = tag("IBSCBS", tag("CST", cst) + tag("cClassTrib", ccl));
+      } else if (CST_IBSCBS_COM_VALOR.has(cst)) {
+        const red = cst === "200" ? Number(it.reducao_ibscbs || 0) : 0;
+        if (cst === "200" && !(red > 0 && red <= 100)) throw new Error(`IBS/CBS: informe o percentual de redução do produto "${it.descricao}" (CST 200).`);
+        // Base: valor da operação sem ICMS, PIS, COFINS e DIFAL (LC 214/2025, regra de transição)
+        const vBC = Math.max(0, arred(bruto - it.desconto + frete - (vICMSTot - icmsAntes) - (vPISTot - pisAntes) - (vCOFINSTot - cofinsAntes) - deduzir));
+        const grupo = (p: number, nomeP: string, nomeV: string) => {
+          const ef = Math.round(p * (1 - red / 100) * 10000) / 10000;
+          const v = arred(vBC * ef / 100);
+          return { v, xml: tag(nomeP, n4(p)) + (red > 0 ? tag("gRed", tag("pRedAliq", n4(red)) + tag("pAliqEfet", n4(ef))) : "") + tag(nomeV, n2(v)) };
+        };
+        const uf = grupo(ibscbs.uf, "pIBSUF", "vIBSUF"), mun = grupo(ibscbs.mun, "pIBSMun", "vIBSMun"), cbs = grupo(ibscbs.cbs, "pCBS", "vCBS");
+        rt.vBC += vBC; rt.vIBSUF += uf.v; rt.vIBSMun += mun.v; rt.vCBS += cbs.v;
+        ibs = tag("IBSCBS", tag("CST", cst) + tag("cClassTrib", ccl) + tag("gIBSCBS", tag("vBC", n2(vBC)) +
+          tag("gIBSUF", uf.xml) + tag("gIBSMun", mun.xml) + tag("vIBS", n2(arred(uf.v + mun.v))) + tag("gCBS", cbs.xml)));
+      } else {
+        throw new Error(`IBS/CBS: CST ${cst} ainda não suportado (produto "${it.descricao}"). Use 000, 200, 400 ou 410.`);
+      }
+    }
+    return `<det nItem="${i + 1}">` + tag("prod", prod) + tag("imposto", tag("ICMS", icms) + pis + cofins + adicional + ibs) + `</det>`;
   }).join("");
-  return { dets, vProd: arred(vProd), vDesc: arred(vDesc), vFrete: arred(vFreteTot), vBCTot, vICMSTot, vPISTot, vCOFINSTot };
+  return { dets, vProd: arred(vProd), vDesc: arred(vDesc), vFrete: arred(vFreteTot), vBCTot, vICMSTot, vPISTot, vCOFINSTot,
+    ibscbs: ibscbs ? { vBC: arred(rt.vBC), vIBSUF: arred(rt.vIBSUF), vIBSMun: arred(rt.vIBSMun), vCBS: arred(rt.vCBS) } : null };
 }
 
 // Distribui o desconto da venda entre os itens (proporcional; sobra no maior item)

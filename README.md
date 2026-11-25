@@ -41,6 +41,7 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Grupo E — NFC-e em contingência off-line (QR Code versão 3 assinado, DANFE em duas vias, transmissão automática em até 24 h com conferência da tentativa original), cancelamento na SEFAZ (evento 110111) junto com a venda, inutilização de numeração com lista de números sem nota e registro no SPED (C100 situação 05)
 - [x] Grupo F — NF-e modelo 55 (venda a empresas e pessoas, devolução ao fornecedor com nota referenciada, frete e volumes, destinatário preenchido pelo cadastro), DANFE A4, cancelamento com estorno do estoque, carta de correção (evento 110110), inutilização da numeração da NF-e; uma venda tem NFC-e ou NF-e, nunca as duas
 - [x] Grupo G (parte 1) — DIFAL na NF-e (grupo ICMSUFDest para regime normal, tabela de ICMS por UF ajustável, base única ou dupla; Simples Nacional e MEI saem sem DIFAL) e notas emitidas contra o CNPJ: busca na SEFAZ (distribuição de documentos), manifestação do destinatário (ciência, confirmação, desconhecimento, operação não realizada) e lançamento da entrada direto pela nota baixada
+- [x] IBS e CBS (reforma tributária) na NF-e e na NFC-e para regime normal e Simples com excesso de sublimite: grupo IBSCBS por item e IBSCBSTot, alíquotas de 2026 (CBS 0,9%, IBS UF 0,1%), base sem ICMS/PIS/COFINS/DIFAL, CST 000/200/400/410 com redução de alíquota pelas regras fiscais; alíquotas dos anos seguintes cadastráveis por ano
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

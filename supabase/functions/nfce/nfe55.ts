@@ -2,7 +2,7 @@
 // Reaproveita a montagem dos itens da NFC-e; gerada já na forma canônica.
 import {
   UF_CODIGO, TEXTO_HOMOLOGACAO_NFE, T_PAG, type Emitente, type ItemNota,
-  txt, so, n2, n4, tag, arred, digitoChave, dataHoraBrasilia, montarItens,
+  txt, so, n2, n4, tag, arred, digitoChave, dataHoraBrasilia, montarItens, aliquotasIBSCBS, totalIBSCBS, type AliquotasIBSCBS,
 } from "./xml.ts";
 
 export interface Destinatario {
@@ -28,6 +28,7 @@ export interface DadosNFe {
   informacoes?: string | null;
   respTecnico?: { cnpj: string; contato: string; email: string; fone: string } | null;
   aliquotasUF?: Record<string, Partial<AliquotaUF>> | null;   // ajustes da empresa sobre a tabela padrão (DIFAL)
+  aliquotasIBSCBS?: Record<string, AliquotasIBSCBS> | null;
 }
 
 // ---------------------------------------------------------------- DIFAL (EC 87/2015, LC 190/2022)
@@ -148,12 +149,12 @@ export function montarInfNFe55(d: DadosNFe) {
     const pInter = aliquotaInterestadual(e.uf, dest.endereco.uf, item.origem);
     const c = calcularDifal(base, pInter, ufDestino);
     vFCPUFDest += c.vFCPUFDest; vICMSUFDest += c.vICMSUFDest;
-    return tag("ICMSUFDest",
+    return { deduzir: c.vICMSUFDest + c.vFCPUFDest, xml: tag("ICMSUFDest",
       tag("vBCUFDest", n2(c.vBC)) + (ufDestino.fcp > 0 ? tag("vBCFCPUFDest", n2(c.vBC)) + tag("pFCPUFDest", n4(ufDestino.fcp)) : "") +
       tag("pICMSUFDest", n4(ufDestino.interna)) + tag("pICMSInter", n2(pInter)) + tag("pICMSInterPart", "100.0000") +
-      (ufDestino.fcp > 0 ? tag("vFCPUFDest", n2(c.vFCPUFDest)) : "") + tag("vICMSUFDest", n2(c.vICMSUFDest)) + tag("vICMSUFRemet", "0.00"));
+      (ufDestino.fcp > 0 ? tag("vFCPUFDest", n2(c.vFCPUFDest)) : "") + tag("vICMSUFDest", n2(c.vICMSUFDest)) + tag("vICMSUFRemet", "0.00")) };
   };
-  const it = montarItens(itens, e.crt, null, grupoDifal);
+  const it = montarItens(itens, e.crt, null, grupoDifal, aliquotasIBSCBS(e.crt, d.emissao, d.aliquotasIBSCBS));
   vFCPUFDest = arred(vFCPUFDest); vICMSUFDest = arred(vICMSUFDest);
   const z = "0.00";
   const vNF = arred(it.vProd - it.vDesc + it.vFrete);
@@ -162,7 +163,7 @@ export function montarInfNFe55(d: DadosNFe) {
     tag("vBC", n2(arred(it.vBCTot))) + tag("vICMS", n2(arred(it.vICMSTot))) + tag("vICMSDeson", z) + totaisDifal + tag("vFCP", z) + tag("vBCST", z) + tag("vST", z) +
     tag("vFCPST", z) + tag("vFCPSTRet", z) + tag("vProd", n2(it.vProd)) + tag("vFrete", n2(it.vFrete)) + tag("vSeg", z) +
     tag("vDesc", n2(it.vDesc)) + tag("vII", z) + tag("vIPI", z) + tag("vIPIDevol", z) + tag("vPIS", n2(arred(it.vPISTot))) +
-    tag("vCOFINS", n2(arred(it.vCOFINSTot))) + tag("vOutro", z) + tag("vNF", n2(vNF))));
+    tag("vCOFINS", n2(arred(it.vCOFINSTot))) + tag("vOutro", z) + tag("vNF", n2(vNF))) + (it.ibscbs ? totalIBSCBS(it.ibscbs) : ""));
 
   const v = d.frete.volumes;
   const vol = v && (v.quantidade || v.pesoBruto || v.pesoLiquido)
@@ -195,7 +196,7 @@ export function montarInfNFe55(d: DadosNFe) {
 
   const corpo = tag("ide", ide) + tag("emit", emit) + destXml + it.dets + total + transp + pag + infAdic + rt;
   const infNFe = `<infNFe Id="NFe${chave}" versao="4.00">${corpo}</infNFe>`;
-  return { chave, infNFe, vNF, vProd: it.vProd, vDesc: it.vDesc, vFrete: it.vFrete, vBC: arred(it.vBCTot), vICMS: arred(it.vICMSTot), vICMSUFDest, vFCPUFDest };
+  return { chave, infNFe, vNF, vProd: it.vProd, vDesc: it.vDesc, vFrete: it.vFrete, vBC: arred(it.vBCTot), vICMS: arred(it.vICMSTot), vICMSUFDest, vFCPUFDest, ibscbs: it.ibscbs };
 }
 
 // Formas de pagamento além das do caixa

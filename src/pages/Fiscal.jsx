@@ -15,6 +15,10 @@ const CST = [
   { valor: '40', texto: '40: isenta' }, { valor: '41', texto: '41: não tributada' }, { valor: '50', texto: '50: suspensão' },
   { valor: '60', texto: '60: ICMS já cobrado por substituição' },
 ]
+const CST_IBSCBS = [
+  { valor: '000', texto: '000 – Tributação integral' }, { valor: '200', texto: '200 – Alíquota reduzida' },
+  { valor: '400', texto: '400 – Isenção' }, { valor: '410', texto: '410 – Imunidade e não incidência' },
+]
 const CFOP = [
   { valor: '5102', texto: '5102: venda de mercadoria de terceiros' }, { valor: '5405', texto: '5405: venda com ICMS já retido (substituído)' },
   { valor: '5101', texto: '5101: venda de produção própria' }, { valor: '5103', texto: '5103: venda de produção fora do estabelecimento' },
@@ -96,10 +100,10 @@ function Regras({ empresa }) {
   const nova = (padrao) => setForm({
     nome: padrao ? 'Padrão' : '', ncm_prefixo: '', origem: null, prioridade: '100', cfop: '5102',
     csosn: sn ? '102' : null, cst_icms: sn ? null : '00', aliquota_icms: '', reducao_bc: '', cbenef: '',
-    cst_pis: null, aliquota_pis: '', cst_cofins: null, aliquota_cofins: '', cst_ibscbs: '', cclasstrib: '', observacao: '', ativo: true,
+    cst_pis: null, aliquota_pis: '', cst_cofins: null, aliquota_cofins: '', cst_ibscbs: '', cclasstrib: '', reducao_ibscbs: '', observacao: '', ativo: true,
   })
   const editar = (r) => setForm({ ...r, ncm_prefixo: r.ncm_prefixo ?? '', prioridade: String(r.prioridade), aliquota_icms: num(r.aliquota_icms), reducao_bc: num(r.reducao_bc),
-    aliquota_pis: num(r.aliquota_pis), aliquota_cofins: num(r.aliquota_cofins), cbenef: r.cbenef ?? '', cst_ibscbs: r.cst_ibscbs ?? '', cclasstrib: r.cclasstrib ?? '', observacao: r.observacao ?? '' })
+    aliquota_pis: num(r.aliquota_pis), aliquota_cofins: num(r.aliquota_cofins), cbenef: r.cbenef ?? '', cst_ibscbs: r.cst_ibscbs ?? '', cclasstrib: r.cclasstrib ?? '', reducao_ibscbs: num(r.reducao_ibscbs), observacao: r.observacao ?? '' })
   const mudar = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e?.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e }))
 
   const salvar = async () => {
@@ -114,9 +118,12 @@ function Regras({ empresa }) {
       csosn: sn ? f.csosn : null, cst_icms: sn ? null : f.cst_icms, aliquota_icms: sn ? 0 : n(f.aliquota_icms), reducao_bc: !sn && f.cst_icms === '20' ? n(f.reducao_bc) : 0,
       cbenef: f.cbenef.trim() || null, cst_pis: f.cst_pis, aliquota_pis: f.cst_pis === '01' ? n(f.aliquota_pis) : 0,
       cst_cofins: f.cst_cofins, aliquota_cofins: f.cst_cofins === '01' ? n(f.aliquota_cofins) : 0,
-      cst_ibscbs: f.cst_ibscbs.trim() || null, cclasstrib: f.cclasstrib.trim() || null, observacao: f.observacao.trim() || null, ativo: f.ativo,
+      cst_ibscbs: f.cst_ibscbs || null, cclasstrib: f.cclasstrib.replace(/\D/g, '') || null,
+      reducao_ibscbs: f.cst_ibscbs === '200' ? n(f.reducao_ibscbs) : 0, observacao: f.observacao.trim() || null, ativo: f.ativo,
     }
-    if ([dados.aliquota_icms, dados.reducao_bc, dados.aliquota_pis, dados.aliquota_cofins].some((x) => Number.isNaN(x) || x < 0 || x > 100)) { avisar('Alíquotas devem ficar entre 0 e 100.', 'erro'); return }
+    if (dados.cclasstrib && (!/^\d{6}$/.test(dados.cclasstrib) || (dados.cst_ibscbs && dados.cclasstrib.slice(0, 3) !== dados.cst_ibscbs))) { avisar('A classificação (cClassTrib) tem 6 dígitos e começa pelo CST do IBS/CBS.', 'erro'); return }
+    if (dados.cst_ibscbs === '200' && !(dados.reducao_ibscbs > 0)) { avisar('Informe o percentual de redução do IBS/CBS.', 'erro'); return }
+    if ([dados.aliquota_icms, dados.reducao_bc, dados.aliquota_pis, dados.aliquota_cofins, dados.reducao_ibscbs].some((x) => Number.isNaN(x) || x < 0 || x > 100)) { avisar('Alíquotas devem ficar entre 0 e 100.', 'erro'); return }
     if (!sn && ['00', '20'].includes(dados.cst_icms) && !(dados.aliquota_icms > 0)) { avisar('Informe a alíquota do ICMS.', 'erro'); return }
     setEnviando(true)
     const r = f.id ? await supabase.from('regras_fiscais').update(dados).eq('id', f.id) : await supabase.from('regras_fiscais').insert(dados)
@@ -227,11 +234,14 @@ function Regras({ empresa }) {
               </div>
             </div>
             <div>
-              <p className="mb-2 font-semibold">Reforma tributária (IBS e CBS)</p>
+              <p className="font-semibold">Reforma tributária (IBS e CBS)</p>
+              <p className="mb-2 text-sm text-tinta-400">Vai na nota do regime normal e do Simples com excesso de sublimite. Em branco, vale 000 (tributação integral).</p>
               <div className="grid gap-3 sm:grid-cols-4">
-                <Campo rotulo="CST do IBS/CBS"><input className="campo num" value={form.cst_ibscbs} onChange={mudar('cst_ibscbs')} placeholder="Ex.: 000" /></Campo>
-                <Campo rotulo="Classificação (cClassTrib)"><input className="campo num" value={form.cclasstrib} onChange={mudar('cclasstrib')} placeholder="Ex.: 000001" /></Campo>
-                <div className="sm:col-span-2"><Campo rotulo="Observação"><input className="campo" value={form.observacao} onChange={mudar('observacao')} placeholder="Ex.: conferido com o contador em novembro" /></Campo></div>
+                <div className="sm:col-span-2"><Campo rotulo="CST do IBS/CBS"><Lista valor={form.cst_ibscbs} opcoes={CST_IBSCBS} placeholder="000 (padrão)"
+                  onMudar={(v) => setForm((f) => ({ ...f, cst_ibscbs: v, cclasstrib: f.cclasstrib && f.cclasstrib.startsWith(v) ? f.cclasstrib : v === '000' ? '000001' : v }))} /></Campo></div>
+                <Campo rotulo="Classificação (cClassTrib)" ajuda="6 dígitos; começa pelo CST"><input className="campo num" inputMode="numeric" maxLength={6} value={form.cclasstrib} onChange={mudar('cclasstrib')} placeholder="000001" /></Campo>
+                {form.cst_ibscbs === '200' && <Campo rotulo="Redução da alíquota (%)" ajuda="Ex.: 60 para medicamentos do anexo"><input className="campo num" inputMode="decimal" value={form.reducao_ibscbs} onChange={mudar('reducao_ibscbs')} /></Campo>}
+                <div className="sm:col-span-4"><Campo rotulo="Observação"><input className="campo" value={form.observacao} onChange={mudar('observacao')} placeholder="Ex.: conferido com o contador em novembro" /></Campo></div>
               </div>
             </div>
             <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={form.ativo} onChange={mudar('ativo')} /> Regra ativa</label>

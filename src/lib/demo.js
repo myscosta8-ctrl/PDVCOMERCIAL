@@ -215,7 +215,7 @@ const TABELAS = {
   ],
   regras_fiscais: [
     { id: 'rf1', nome: 'Padrão', ativo: true, prioridade: 100, ncm_prefixo: null, origem: null, cfop: '5102', csosn: '102', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '49', aliquota_pis: 0, cst_cofins: '49', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: null },
-    { id: 'rf2', nome: 'Medicamentos com substituição tributária', ativo: true, prioridade: 100, ncm_prefixo: '3004', origem: null, cfop: '5405', csosn: '500', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '04', aliquota_pis: 0, cst_cofins: '04', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: 'Conferido com o contador' },
+    { id: 'rf2', nome: 'Medicamentos com substituição tributária', ativo: true, prioridade: 100, ncm_prefixo: '3004', origem: null, cfop: '5405', csosn: '500', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '04', aliquota_pis: 0, cst_cofins: '04', aliquota_cofins: 0, cbenef: null, cst_ibscbs: '200', cclasstrib: '200014', reducao_ibscbs: 60, observacao: 'Conferido com o contador' },
     { id: 'rf3', nome: 'Higiene pessoal monofásico', ativo: true, prioridade: 100, ncm_prefixo: '3305', origem: null, cfop: '5405', csosn: '500', cst_icms: null, aliquota_icms: 0, reducao_bc: 0, cst_pis: '04', aliquota_pis: 0, cst_cofins: '04', aliquota_cofins: 0, cbenef: null, cst_ibscbs: null, cclasstrib: null, observacao: null },
   ],
   receitas: [

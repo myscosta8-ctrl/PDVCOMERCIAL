@@ -112,7 +112,7 @@ interface Montagem { numero: number; codigo: string; emissao: Date; contingencia
 async function montarNota(empresa: Record<string, any>, venda: Record<string, any>, cert: Certificado, csc: string, m: Montagem) {
   const [{ data: itens }, { data: pagamentos }] = await Promise.all([
     servico.from("venda_itens")
-      .select("sequencia, quantidade, preco_unitario, desconto, descricao, cfop, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, origem, ncm, cest, cbenef, produto:produtos(id, codigo, ean, ncm, cest, cfop, unidade, origem, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cbenef)")
+      .select("sequencia, quantidade, preco_unitario, desconto, descricao, cfop, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, origem, ncm, cest, cbenef, produto:produtos(id, codigo, ean, ncm, cest, cfop, unidade, origem, csosn, cst_icms, aliquota_icms, reducao_bc, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cbenef, cst_ibscbs, cclasstrib, reducao_ibscbs)")
       .eq("venda_id", venda.id).order("sequencia"),
     servico.from("venda_pagamentos").select("forma, valor").eq("venda_id", venda.id),
   ]);
@@ -141,11 +141,13 @@ async function montarNota(empresa: Record<string, any>, venda: Record<string, an
         origem: Number(f("origem") ?? 0), csosn: f("csosn"), cst_icms: f("cst_icms"),
         aliquota_icms: Number(f("aliquota_icms") ?? 0), reducao_bc: Number(f("reducao_bc") ?? 0), cbenef: f("cbenef"),
         cst_pis: f("cst_pis"), aliquota_pis: Number(f("aliquota_pis") ?? 0), cst_cofins: f("cst_cofins"), aliquota_cofins: Number(f("aliquota_cofins") ?? 0),
+        cst_ibscbs: f("cst_ibscbs"), cclasstrib: f("cclasstrib"), reducao_ibscbs: Number(f("reducao_ibscbs") ?? 0),
       };
     }),
     pagamentos: (pagamentos ?? []).map((p) => ({ forma: p.forma, valor: Number(p.valor) })),
     troco: Number(venda.troco),
     cpf_cnpj_consumidor: venda.cpf_consumidor,
+    aliquotasIBSCBS: empresa.ibscbs_aliquotas,
   });
   const urlQr = urlQrDaEmpresa(empresa, ambiente);
   let qrCode: string;
@@ -483,6 +485,7 @@ async function emitirNfe(usuario: Usuario, id: string) {
     csosn: i.csosn ?? null, cst_icms: i.cst_icms ?? null, aliquota_icms: Number(i.aliquota_icms ?? 0), reducao_bc: Number(i.reducao_bc ?? 0),
     cbenef: i.cbenef ?? null, cst_pis: i.cst_pis ?? null, aliquota_pis: Number(i.aliquota_pis ?? 0), cst_cofins: i.cst_cofins ?? null,
     aliquota_cofins: Number(i.aliquota_cofins ?? 0), frete: fretes[k], xPed: i.pedido ?? null,
+    cst_ibscbs: i.cst_ibscbs ?? null, cclasstrib: i.cclasstrib ?? null, reducao_ibscbs: Number(i.reducao_ibscbs ?? 0),
   }));
   let montado;
   try {
@@ -497,7 +500,7 @@ async function emitirNfe(usuario: Usuario, id: string) {
       destinatario: d.destinatario as Destinatario, itens,
       frete: { modalidade: Number(d.frete?.modalidade ?? 9) as 0 | 1 | 2 | 9, volumes: d.frete?.volumes ?? null },
       pagamentos: (d.pagamentos ?? []).map((p: Record<string, unknown>) => ({ forma: String(p.forma), valor: Number(p.valor) })),
-      referencias: d.referencias ?? [], informacoes: d.informacoes, respTecnico: empresa.resp_tecnico, aliquotasUF: empresa.aliquotas_uf,
+      referencias: d.referencias ?? [], informacoes: d.informacoes, respTecnico: empresa.resp_tecnico, aliquotasUF: empresa.aliquotas_uf, aliquotasIBSCBS: empresa.ibscbs_aliquotas,
     });
   } catch (e) {
     throw new ErroUsuario((e as Error).message);
