@@ -4,7 +4,7 @@ import { textoPorRegras } from '../../supabase/functions/resumo/resumo.ts'
 const agora = new Date()
 const h = (horas, min = 0) => { const d = new Date(agora); d.setHours(horas, min, 0, 0); return d.toISOString() }
 const EMP = {
-  id: 'e1', razao_social: 'Farma Família Ltda', nome_fantasia: 'Farma Família', segmento: (() => { try { return localStorage.getItem('demo:segmento') || 'farmacia' } catch { return 'farmacia' } })(), cnpj: '12345678000195',
+  id: 'e1', razao_social: 'Farma Família Ltda', nome_fantasia: 'Farma Família', taxa_servico: 10, segmento: (() => { try { return localStorage.getItem('demo:segmento') || 'farmacia' } catch { return 'farmacia' } })(), cnpj: '12345678000195',
   inscricao_estadual: '151234567', uf: 'PA', municipio_ibge: '1501808', regime_tributario: 'simples', nfce_ambiente: 2, nfce_serie: 1,
   nfce_csc_id: '000001', markup_padrao: 35, certificado_titular: 'FARMA FAMILIA LTDA:12345678000195', certificado_validade: '2027-08-10T00:00:00Z',
   nfce_url_qrcode: 'https://appnfc.sefa.pa.gov.br/portal-homologacao/view/consultas/nfce/nfceForm.seam', nfce_url_consulta: 'www.sefa.pa.gov.br/nfce/consulta',
@@ -532,7 +532,8 @@ export const clienteDemo = {
   rpc: async (nome, args) => {
     if (nome === 'precos_itens') {
       return { data: args.p_itens.map((i) => {
-        const p = PRODUTOS.find((x) => x.id === i.produto_id) ?? { preco_venda: 0 }
+        const p = PRODUTOS.find((x) => x.id === i.produto_id)
+        if (!p) return { produto_id: i.produto_id, preco: null, preco_base: null, origem: 'base', nome: null }
         const promo = i.produto_id === 'p6' ? { preco: 49.9, origem: 'promocao', nome: 'Protetor em oferta' } : null
         return { produto_id: i.produto_id, preco: promo?.preco ?? p.preco_venda, preco_base: p.preco_venda, origem: promo?.origem ?? 'base', nome: promo?.nome ?? null }
       }), error: null }

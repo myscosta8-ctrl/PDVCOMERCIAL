@@ -98,6 +98,7 @@ export default function Relatorios() {
           <Indicador titulo="Descontos e devoluções" icone="alerta" tom={s.devolucoes > 0 || s.canceladas > 0 ? 'alerta' : 'neutro'} valor={dinheiro(Number(s.descontos) + Number(s.devolucoes))}
             detalhe={`Descontos ${dinheiro(s.descontos)}; devoluções ${dinheiro(s.devolucoes)}; ${s.canceladas} cancelada(s)`} />
         </div>
+        {Number(s.taxa_servico) > 0 && <p className="mt-2 text-sm text-tinta-400">Taxa de serviço recebida no período: {dinheiro(s.taxa_servico)}. Fica fora do faturamento, porque pertence à equipe.</p>}
 
         <div className="mb-4 mt-5 inline-flex flex-wrap abas" role="tablist">
           {ABAS.map(([id, nome]) => (

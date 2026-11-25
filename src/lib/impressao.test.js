@@ -51,6 +51,13 @@ describe('comandas', () => {
     expect(h).toMatch(/Por pessoa \(2\)<\/td><td class="r">R\$\s34,00/)
     expect(h).toContain('NÃO É DOCUMENTO FISCAL')
   })
+  it('pré-conta mostra a taxa de serviço opcional', () => {
+    const h = htmlPreConta({ empresa: { razao_social: 'Bar' }, comanda: { numero: 7, mesa: 4, pessoas: 2 }, itens, taxaServico: 10 })
+    expect(h).toMatch(/Consumo<\/td><td class="r">R\$\s68,00/)
+    expect(h).toMatch(/Taxa de serviço opcional \(10%\)<\/td><td class="r">R\$\s6,80/)
+    expect(h).toMatch(/TOTAL<\/td><td class="r">R\$\s74,80/)
+    expect(h).toMatch(/Por pessoa \(2\)<\/td><td class="r">R\$\s37,40/)
+  })
   it('pedido da cozinha traz a mesa e a observação', () => {
     const h = htmlPedidoCozinha({ comanda: { numero: 7, mesa: 4 }, itens: [itens[0]], garcom: 'Ana' })
     expect(h).toContain('MESA 4')

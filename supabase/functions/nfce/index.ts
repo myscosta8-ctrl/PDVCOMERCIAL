@@ -163,7 +163,10 @@ async function montarNota(empresa: Record<string, any>, venda: Record<string, an
     }),
     pagamentos: pags.pagamentos,
     troco: pags.troco,
-    informacoes: valorServicos > 0 ? `Serviços prestados nesta venda (R$ ${valorServicos.toFixed(2).replace(".", ",")}) não estão incluídos neste documento.` : null,
+    informacoes: [
+      valorServicos > 0 ? `Serviços prestados nesta venda (R$ ${valorServicos.toFixed(2).replace(".", ",")}) não estão incluídos neste documento.` : "",
+      Number(venda.taxa_servico) > 0 ? `Taxa de serviço (gorjeta, Lei 13.419/2017) de R$ ${Number(venda.taxa_servico).toFixed(2).replace(".", ",")} paga à parte, fora deste documento.` : "",
+    ].filter(Boolean).join(" ") || null,
     cpf_cnpj_consumidor: venda.cpf_consumidor,
     aliquotasIBSCBS: empresa.ibscbs_aliquotas,
   });

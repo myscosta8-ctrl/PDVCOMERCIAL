@@ -49,6 +49,7 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] Relatórios de vendas — período com comparação ao anterior, faturamento por dia, mapa de movimento por dia da semana e hora, curva ABC com margem, categorias, operadores, formas de pagamento, clientes e produtos sem venda; exportação em planilha
 - [x] Restaurante — mesas e comandas (abrir mesa, comanda sem mesa, lançar pedidos com observação, trocar de mesa, juntar comandas, conferência de conta com divisão por pessoa, fechamento da conta pela venda normal com NFC-e), tela da cozinha com tempo de espera e pedido impresso para a cozinha
 - [x] Ordem de serviço — entrada do equipamento com defeito relatado, orçamento, aprovação, execução, pronta e entrega com recebimento no caixa (venda normal), impressão A4 em duas vias com termo e garantia; serviços no cadastro de produtos (sem estoque e fora da NFC-e, com pagamentos proporcionais na nota)
+- [x] Taxa de serviço nas comandas — percentual configurável (0 a 20%), opcional para o cliente no fechamento, impressa na conferência de conta e no comprovante; fica fora da NFC-e e do faturamento dos relatórios
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

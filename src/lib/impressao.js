@@ -59,6 +59,7 @@ ${itens.map((i) => `<tr><td colspan="3">${esc(i.sequencia)} ${esc(i.descricao)}<
     ['Subtotal', dinheiro(venda.subtotal)],
     Number(venda.desconto) > 0 && ['Desconto', `-${dinheiro(venda.desconto)}`],
     Number(venda.acrescimo) > 0 && ['Acréscimo', dinheiro(venda.acrescimo)],
+    Number(venda.taxa_servico) > 0 && ['Taxa de serviço', dinheiro(venda.taxa_servico)],
     ['TOTAL', dinheiro(venda.total), 'b g'],
     ...pagamentos.map((p) => [esc(nomeForma(p.forma)), dinheiro(p.valor)]),
     Number(venda.troco) > 0 && ['Troco', dinheiro(venda.troco)],
@@ -220,7 +221,7 @@ export async function imprimirComEmpresa(montar, { automatica = false } = {}) {
 }
 
 // Pré-conta da comanda (não fiscal), com a divisão por pessoa
-export function htmlPreConta({ empresa, comanda, itens, config }) {
+export function htmlPreConta({ empresa, comanda, itens, config, taxaServico = 0 }) {
   const cfg = { ...IMPRESSAO_PADRAO, ...(config || {}) }
   const validos = itens.filter((i) => i.status !== 'cancelado')
   const total = validos.reduce((s, i) => s + Number(i.quantidade) * Number(i.preco_unitario), 0)
@@ -228,7 +229,12 @@ export function htmlPreConta({ empresa, comanda, itens, config }) {
   const corpo = `${cabecalhoEmpresa(empresa)}<hr><div class="c b g">CONFERÊNCIA DE CONTA</div>
 <div class="c">${comanda.mesa ? `Mesa ${esc(comanda.mesa)} - ` : ''}Comanda nº ${esc(comanda.numero)}${comanda.identificacao ? `<br>${esc(comanda.identificacao)}` : ''}<br>${esc(dataHora(new Date().toISOString()))}</div><hr>
 ${linhas(validos.map((i) => [`${esc(Number(i.quantidade).toLocaleString('pt-BR'))} x ${esc(i.descricao)}`, dinheiro(Number(i.quantidade) * Number(i.preco_unitario))]))}<hr>
-${linhas([['TOTAL', dinheiro(total), 'b g'], pessoas > 1 && [`Por pessoa (${pessoas})`, dinheiro(total / pessoas)]])}
+${taxaServico > 0 ? (() => {
+    const taxa = Math.round(total * taxaServico) / 100
+    const comTaxa = total + taxa
+    return linhas([['Consumo', dinheiro(total)], [`Taxa de serviço opcional (${String(taxaServico).replace('.', ',')}%)`, dinheiro(taxa)],
+      ['TOTAL', dinheiro(comTaxa), 'b g'], pessoas > 1 && [`Por pessoa (${pessoas})`, dinheiro(comTaxa / pessoas)]])
+  })() : linhas([['TOTAL', dinheiro(total), 'b g'], pessoas > 1 && [`Por pessoa (${pessoas})`, dinheiro(total / pessoas)]])}
 <hr><div class="c">NÃO É DOCUMENTO FISCAL</div>${cfg.mensagem ? `<div class="c">${esc(cfg.mensagem)}</div>` : ''}`
   return paginaBobina('Conferência de conta', corpo, cfg.largura)
 }

@@ -232,7 +232,7 @@ function DetalheComanda({ id, mesas, comandas, onFechar, onMudou }) {
         <Botao variante="secundario" onClick={() => { setAcao('cancelar'); setMotivo('') }}>Cancelar comanda</Botao>
         <Botao variante="secundario" onClick={() => { setAcao('transferir'); setAlvo(null) }}>Trocar de mesa</Botao>
         <Botao variante="secundario" onClick={() => { setAcao('juntar'); setAlvo(null) }} disabled={!outras.length}>Juntar comandas</Botao>
-        <Botao variante="secundario" icone="impressora" onClick={async () => { const x = await imprimirComEmpresa((empresa, config) => htmlPreConta({ empresa, comanda: { ...c, mesa: mesaNum }, itens, config })); if (x?.erro) avisar(x.erro, 'erro') }} disabled={!validos.length}>Conferência de conta</Botao>
+        <Botao variante="secundario" icone="impressora" onClick={async () => { const x = await imprimirComEmpresa((empresa, config) => htmlPreConta({ empresa, comanda: { ...c, mesa: mesaNum }, itens, config, taxaServico: cfg.taxaServico || 0 })); if (x?.erro) avisar(x.erro, 'erro') }} disabled={!validos.length}>Conferência de conta</Botao>
         <Botao variante="sucesso" icone="dinheiro" onClick={abrirPagamento} disabled={!validos.length}>Fechar conta {dinheiro(total)}</Botao>
       </>}>
       <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
@@ -331,7 +331,7 @@ function DetalheComanda({ id, mesas, comandas, onFechar, onMudou }) {
       onCancelar={() => setAcao(null)}
       onConfirmar={async () => { if (await executar('cancelar_comanda', { p_comanda: c.id, p_motivo: motivo }, 'Comanda cancelada.')) { setAcao(null); onMudou(); onFechar() } }} />
 
-    {pagar && <Pagamento caixa={caixa} itens={pagar} cliente={null} tabela={null} cfg={cfg} fechar={{ rpc: 'fechar_comanda', args: { p_comanda: c.id } }} onFechar={() => setPagar(null)} onConcluir={concluida} />}
+    {pagar && <Pagamento caixa={caixa} itens={pagar} cliente={null} tabela={null} cfg={cfg} fechar={{ rpc: 'fechar_comanda', args: { p_comanda: c.id } }} taxaServico={cfg.taxaServico || 0} onFechar={() => setPagar(null)} onConcluir={concluida} />}
   </>)
 }
 

@@ -37,14 +37,17 @@ export const remover = (itens, chave) => itens.filter((i) => i.chave !== chave)
 
 export const totalItem = (i) => arred(i.quantidade * i.preco_unitario - (i.desconto || 0))
 
-export function totais(itens, descontoGeral = 0, pagamentos = []) {
+// taxaServico: percentual da taxa de serviço (mesas e comandas), calculado sobre o valor já com desconto
+export function totais(itens, descontoGeral = 0, pagamentos = [], taxaServico = 0) {
   const subtotal = arred(itens.reduce((s, i) => s + totalItem(i), 0))
-  const total = arred(Math.max(0, subtotal - descontoGeral))
+  const liquido = arred(Math.max(0, subtotal - descontoGeral))
+  const taxa = taxaServico > 0 ? arred(liquido * taxaServico / 100) : 0
+  const total = arred(liquido + taxa)
   const pago = arred(pagamentos.reduce((s, p) => s + Number(p.valor || 0), 0))
   const dinheiro = arred(pagamentos.filter((p) => p.forma === 'dinheiro').reduce((s, p) => s + Number(p.valor), 0))
   const falta = arred(Math.max(0, total - pago))
   const troco = arred(Math.max(0, pago - total))
-  return { subtotal, total, pago, falta, troco, trocoValido: troco <= dinheiro }
+  return { subtotal, taxa, total, pago, falta, troco, trocoValido: troco <= dinheiro }
 }
 
 // Formato esperado pela função finalizar_venda do banco

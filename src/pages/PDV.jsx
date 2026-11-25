@@ -51,6 +51,7 @@ export function useConfigCaixa() {
       pix: data.pix_chave ? { chave: data.pix_chave, nome: data.pix_nome || data.nome_fantasia || data.razao_social, cidade: data.pix_cidade || data.endereco?.municipio } : null,
       pixDinamico: !!(data.pix_dinamico?.url_api && data.pix_dinamico?.url_token && data.pix_dinamico?.chave),
       cartao: { pedir: !!data.cartao_pedir_dados, credenciadora: data.cartao_credenciadora_cnpj || null },
+      taxaServico: Number(data.taxa_servico) || 0,
     }))
   }, [])
   return cfg
@@ -475,7 +476,8 @@ export default function PDV() {
 }
 
 // fechar: { rpc, args } para concluir outro documento (comanda, ordem de serviço) em vez da venda do carrinho
-export function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir, fechar = null }) {
+// taxaServico: percentual da taxa de serviço (só no fechamento de comanda); o cliente pode recusar
+export function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConcluir, fechar = null, taxaServico = 0 }) {
   const avisar = useAviso()
   const controlados = itens.filter((i) => i.controlado)
   const [receita, setReceita] = useState(null)
@@ -498,8 +500,9 @@ export function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConc
   const [parcelas, setParcelas] = useState(1)
   const amanha30 = new Date(Date.now() + 30 * 864e5 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
   const [primeiroVenc, setPrimeiroVenc] = useState(amanha30)
+  const [cobrarTaxa, setCobrarTaxa] = useState(taxaServico > 0)
   const desc = lerNumero(desconto) || 0
-  const t = totais(itens, desc, pagamentos)
+  const t = totais(itens, desc, pagamentos, cobrarTaxa ? taxaServico : 0)
   const sit = cliente?.situacao ?? {}
   const usado = (f) => pagamentos.filter((p) => p.forma === f).reduce((s, p) => s + p.valor, 0)
   const valeDisponivel = arred(Number(sit.vale ?? 0) - usado('vale'))
@@ -561,6 +564,7 @@ export function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConc
       p_tabela: tabela,
       p_cpf: cpf.replace(/\D/g, '') || null,
       ...(rec ? { p_receitas: [rec] } : {}),
+      ...(taxaServico > 0 ? { p_taxa_servico: cobrarTaxa } : {}),
     })
     setEnviando(false)
     if (error) { avisar(mensagemErro(error), 'erro'); return }
@@ -586,6 +590,16 @@ export function Pagamento({ caixa, itens, cliente, tabela, cfg, onFechar, onConc
         <div className={`border-x border-papel-200 p-3 dark:border-noite-700 ${t.falta > 0 ? 'bg-ambar-50 dark:bg-ambar-600/10' : ''}`}><p className="text-sm text-tinta-400">Falta receber</p><p className={`num text-2xl font-semibold ${t.falta > 0 ? 'text-ambar-600' : 'text-tinta-300'}`}>{dinheiro(t.falta)}</p></div>
         <div className={`p-3 ${t.troco > 0 ? 'bg-caixa-50 dark:bg-caixa-700/20' : ''}`}><p className="text-sm text-tinta-400">Troco</p><p className={`num text-2xl font-semibold ${t.troco > 0 ? 'text-caixa-600' : 'text-tinta-300'}`}>{dinheiro(t.troco)}</p></div>
       </div>
+
+      {taxaServico > 0 && (
+        <label className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-papel-200 px-4 py-2.5 dark:border-noite-700">
+          <span className="flex items-center gap-2">
+            <input type="checkbox" className="h-4 w-4 accent-caixa-600" checked={cobrarTaxa} onChange={(e) => setCobrarTaxa(e.target.checked)} />
+            <span>Taxa de serviço ({String(taxaServico).replace('.', ',')}%)<span className="block text-sm text-tinta-400">Opcional para o cliente; desmarque se ele não quiser pagar. Não entra na NFC-e.</span></span>
+          </span>
+          <strong className="num">{dinheiro(cobrarTaxa ? t.taxa : 0)}</strong>
+        </label>
+      )}
 
       {t.falta > 0 && (
         <div className="mt-5">

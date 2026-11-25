@@ -20,6 +20,12 @@ describe('carrinho', () => {
     const t = totais(c, 5, [{ forma: 'pix', valor: 10 }, { forma: 'dinheiro', valor: 20 }])
     expect(t).toMatchObject({ subtotal: 30, total: 25, pago: 30, falta: 0, troco: 5, trocoValido: true })
   })
+  it('soma a taxa de serviço sobre o valor com desconto', () => {
+    const c = adicionar([], p, 4)
+    const t = totais(c, 5, [{ forma: 'dinheiro', valor: 40 }], 10)
+    expect(t).toMatchObject({ subtotal: 40, taxa: 3.5, total: 38.5, troco: 1.5 })
+    expect(totais(c, 0, [], 0).taxa).toBe(0)
+  })
   it('troco sem dinheiro é inválido', () => {
     const t = totais(adicionar([], p), 0, [{ forma: 'pix', valor: 15 }])
     expect(t.trocoValido).toBe(false)
