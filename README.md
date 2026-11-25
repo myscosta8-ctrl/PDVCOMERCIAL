@@ -45,6 +45,7 @@ Sistema de frente de caixa multiempresa, para qualquer segmento (varejo, farmác
 - [x] MDF-e (modelo 58) para carga própria em veículo da empresa: emissão a partir das NF-e autorizadas, consulta, encerramento da viagem e cancelamento; IBS e CBS no DANFE impresso
 - [x] Grupo I — PIX dinâmico pela API Pix do banco (cobrança por venda, confirmação automática, cancelamento, credenciais no cofre) e dados do cartão da maquininha (bandeira, autorização, NSU e credenciadora) na NFC-e
 - [x] Grupo J — Resumo do mês na tela Início: escrito por IA quando a chave estiver configurada no servidor, ou montado pelas regras do sistema
+- [x] Painel do revendedor — cadastro de empresas clientes com convite do administrador, plano e mensalidade, geração e baixa das mensalidades, suspensão e reativação do acesso (dados preservados), uso de cada loja nos últimos 30 dias; primeiro acesso e troca de senha na tela de entrada
 - [ ] Fase 2 — Módulos por segmento, impressão térmica, PIX integrado, relatórios e painel do revendedor
 
 ## Testes

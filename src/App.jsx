@@ -22,6 +22,7 @@ import Financeiro from './pages/Financeiro.jsx'
 import Estoque from './pages/Estoque.jsx'
 import Fiscal from './pages/Fiscal.jsx'
 import Controlados from './pages/Controlados.jsx'
+import Revenda from './pages/Revenda.jsx'
 
 const TELAS = [
   { id: 'inicio', grupo: 'vender', nome: 'Início', icone: 'inicio', papeis: ['administrador', 'gerente'] },
@@ -40,6 +41,7 @@ const TELAS = [
   { id: 'fiscal', grupo: 'gestao', nome: 'Fiscal', icone: 'nota', papeis: ['administrador', 'gerente'] },
   { id: 'vendas', grupo: 'gestao', nome: 'Vendas', icone: 'vendas', papeis: ['administrador', 'gerente'] },
   { id: 'configuracoes', grupo: 'sistema', nome: 'Configurações', icone: 'configuracoes', papeis: ['administrador'] },
+  { id: 'revenda', grupo: 'sistema', nome: 'Revenda', icone: 'usuario', papeis: [], revendedor: true },
 ]
 const GRUPOS = { vender: 'Vender', estoque: 'Estoque e compras', gestao: 'Gestão', sistema: 'Sistema' }
 const PAPEIS = { administrador: 'Administrador', gerente: 'Gerente', operador: 'Operador de caixa' }
@@ -56,30 +58,35 @@ function Principal() {
   const [sessao, setSessao] = useState(undefined)
   const [perfil, setPerfil] = useState(null)
   const [erroPerfil, setErroPerfil] = useState('')
+  const [suspensa, setSuspensa] = useState(null)
+  const [novaSenha, setNovaSenha] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessao(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSessao(s))
+    const { data } = supabase.auth.onAuthStateChange((e, s) => { setSessao(s); if (e === 'PASSWORD_RECOVERY') setNovaSenha(true) })
     return () => data.subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
-    if (!sessao) { setPerfil(null); return }
-    supabase
-      .from('usuarios')
-      .select('id, nome, papel, empresa:empresas(id, razao_social, nome_fantasia, segmento, nfce_ambiente, certificado_titular)')
-      .eq('id', sessao.user.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error) setErroPerfil(mensagemErro(error))
-        else if (!data) setErroPerfil('Seu usuário ainda não está vinculado a uma empresa. Procure o administrador.')
-        else setPerfil(data)
-      })
+    if (!sessao) { setPerfil(null); setSuspensa(null); return }
+    Promise.all([
+      supabase.from('usuarios')
+        .select('id, nome, papel, empresa:empresas(id, razao_social, nome_fantasia, segmento, nfce_ambiente, certificado_titular)')
+        .eq('id', sessao.user.id).maybeSingle(),
+      supabase.rpc('situacao_acesso'),
+    ]).then(([{ data, error }, { data: acesso }]) => {
+      if (error) setErroPerfil(mensagemErro(error))
+      else if (!data && (acesso?.suspensa || acesso?.encerrada)) setSuspensa(acesso)
+      else if (!data) setErroPerfil('Seu usuário ainda não está vinculado a uma empresa. Procure o administrador.')
+      else setPerfil({ ...data, revendedor: !!acesso?.revendedor, licenca: acesso ?? {} })
+    })
   }, [sessao])
 
   if (sessao === undefined) return <Carregando />
   if (!sessao) return <Login />
+  if (novaSenha) return <NovaSenha onPronto={() => setNovaSenha(false)} />
   if (erroPerfil) return <Centro><p className="text-sm">{erroPerfil}</p><Botao variante="secundario" onClick={() => supabase.auth.signOut()}>Sair</Botao></Centro>
+  if (suspensa) return <AcessoSuspenso situacao={suspensa} />
   if (!perfil) return <Carregando />
   return (
     <SessaoCtx.Provider value={perfil}>
@@ -90,7 +97,7 @@ function Principal() {
 
 function Painel() {
   const perfil = useSessao()
-  const telas = TELAS.filter((t) => t.papeis.includes(perfil.papel) && (!t.segmento || t.segmento === perfil.empresa.segmento))
+  const telas = TELAS.filter((t) => (t.revendedor ? perfil.revendedor : t.papeis.includes(perfil.papel)) && (!t.segmento || t.segmento === perfil.empresa.segmento))
   const [tela, setTela] = useState(() => {
     let salva
     try { salva = localStorage.getItem('tela') } catch {}
@@ -175,6 +182,12 @@ function Painel() {
           <button onClick={() => supabase.auth.signOut()} className="ml-auto rounded-lg px-2 py-1.5 text-tinta-300" aria-label="Sair"><Icone nome="sair" className="h-4 w-4" /></button>
         </div>
         <BarraSituacao irPara={ir} />
+        {perfil.papel === 'administrador' && perfil.licenca?.mensalidades_vencidas > 0 && (
+          <div className="flex items-center gap-2 border-b border-ambar-100 bg-ambar-50 px-4 py-2 text-sm text-ambar-700 md:px-8 dark:border-ambar-700/40 dark:bg-ambar-600/10 dark:text-ambar-300">
+            <Icone nome="alerta" className="h-4 w-4 shrink-0" />
+            {perfil.licenca.mensalidades_vencidas === 1 ? 'Há 1 mensalidade do sistema vencida' : `Há ${perfil.licenca.mensalidades_vencidas} mensalidades do sistema vencidas`} ({dinheiroBR(perfil.licenca.valor_vencido)}). Regularize para evitar a suspensão do acesso.
+          </div>
+        )}
         <main className="fundo-trabalho flex-1 p-4 md:p-8">
           {tela === 'inicio' && <Inicio irPara={ir} />}
           {tela === 'pdv' && <PDV />}
@@ -192,6 +205,7 @@ function Painel() {
           {tela === 'notas' && perfil.papel !== 'operador' && <NotasFiscais />}
           {tela === 'mdfe' && perfil.papel !== 'operador' && <Manifestos />}
           {tela === 'configuracoes' && perfil.papel === 'administrador' && <Configuracoes />}
+          {tela === 'revenda' && perfil.revendedor && <Revenda />}
         </main>
       </div>
     </div>
@@ -230,18 +244,83 @@ function BarraSituacao({ irPara }) {
   )
 }
 
+const dinheiroBR = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+function NovaSenha({ onPronto }) {
+  const [senha, setSenha] = useState('')
+  const [confirmar, setConfirmar] = useState('')
+  const [erro, setErro] = useState('')
+  const [carregando, setCarregando] = useState(false)
+  const salvar = async (e) => {
+    e.preventDefault()
+    if (senha.length < 8) { setErro('A senha precisa ter pelo menos 8 caracteres.'); return }
+    if (senha !== confirmar) { setErro('As senhas não conferem.'); return }
+    setCarregando(true)
+    const { error } = await supabase.auth.updateUser({ password: senha })
+    setCarregando(false)
+    if (error) setErro(mensagemErro(error)); else onPronto()
+  }
+  return (
+    <div className="fundo-trabalho flex min-h-screen items-center justify-center p-6">
+      <form onSubmit={salvar} className="cartao w-full max-w-sm space-y-5 p-8">
+        <div><h1 className="num text-[2rem] font-bold leading-none tracking-tight">Nova senha</h1><p className="mt-2 text-tinta-400">Crie a nova senha de acesso.</p></div>
+        <Campo rotulo="Nova senha" ajuda="Pelo menos 8 caracteres"><input className="campo" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required autoFocus autoComplete="new-password" /></Campo>
+        <Campo rotulo="Repita a senha"><input className="campo" type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} required autoComplete="new-password" /></Campo>
+        {erro && <p className="rounded-xl bg-rubro-50 px-3 py-2 text-sm text-rubro-600">{erro}</p>}
+        <Botao type="submit" className="w-full py-3" carregando={carregando}>Salvar nova senha</Botao>
+      </form>
+    </div>
+  )
+}
+
+// Empresa suspensa ou encerrada pelo revendedor: os dados ficam preservados, mas o acesso é bloqueado
+function AcessoSuspenso({ situacao }) {
+  return (
+    <Centro>
+      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-ambar-50 text-ambar-600 dark:bg-ambar-600/15 dark:text-ambar-300"><Icone nome="alerta" className="h-7 w-7" /></span>
+      <h1 className="text-xl font-semibold">{situacao.encerrada ? 'Contrato encerrado' : 'Acesso suspenso'}</h1>
+      <p className="max-w-sm text-center text-[0.95rem] text-tinta-500 dark:text-tinta-300">
+        O acesso de {situacao.empresa || situacao.razao_social} ao sistema está {situacao.encerrada ? 'encerrado' : 'suspenso'}.
+        {situacao.motivo ? ` Motivo: ${situacao.motivo}.` : ''} Os dados continuam guardados. Fale com o fornecedor do sistema para regularizar.
+      </p>
+      {situacao.valor_vencido > 0 && <p className="text-sm font-semibold text-ambar-700 dark:text-ambar-300">Valor em aberto: {dinheiroBR(situacao.valor_vencido)}</p>}
+      <Botao variante="secundario" onClick={() => supabase.auth.signOut()}>Sair</Botao>
+    </Centro>
+  )
+}
+
 function Login() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
+  const [aviso, setAviso] = useState('')
   const [carregando, setCarregando] = useState(false)
+  const [modo, setModo] = useState('entrar')   // entrar | primeiro | esqueci
+  const [confirmar, setConfirmar] = useState('')
+  const volta = window.location.origin + window.location.pathname
+  const trocar = (m) => { setModo(m); setErro(''); setAviso('') }
   const entrar = async (e) => {
     e.preventDefault()
-    setCarregando(true); setErro('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
-    if (error) setErro(mensagemErro(error))
+    setCarregando(true); setErro(''); setAviso('')
+    if (modo === 'entrar') {
+      const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
+      if (error) setErro(mensagemErro(error))
+    } else if (modo === 'primeiro') {
+      if (senha.length < 8) setErro('A senha precisa ter pelo menos 8 caracteres.')
+      else if (senha !== confirmar) setErro('As senhas não conferem.')
+      else {
+        const { data, error } = await supabase.auth.signUp({ email: email.trim().toLowerCase(), password: senha, options: { emailRedirectTo: volta } })
+        if (error) setErro(mensagemErro(error))
+        else if (!data.session) setAviso('Enviamos um link de confirmação para o seu e-mail. Abra o link e depois entre com a senha criada.')
+      }
+    } else {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: volta })
+      if (error) setErro(mensagemErro(error))
+      else setAviso('Se o e-mail estiver cadastrado, você vai receber um link para criar uma nova senha.')
+    }
     setCarregando(false)
   }
+  const TITULOS = { entrar: ['Entrar', 'Use o e-mail e a senha do seu acesso.', 'Entrar'], primeiro: ['Primeiro acesso', 'Use o e-mail em que você foi convidado e crie a sua senha.', 'Criar senha'], esqueci: ['Esqueci a senha', 'Informe o e-mail de acesso para receber o link de nova senha.', 'Enviar link'] }
   return (
     <div className="grid min-h-screen md:grid-cols-[1.05fr_1fr]">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-tinta-900 p-12 text-papel md:flex">
@@ -272,13 +351,21 @@ function Login() {
       <div className="fundo-trabalho flex items-center justify-center p-6">
         <form onSubmit={entrar} className="cartao w-full max-w-sm space-y-5 p-8">
           <div>
-            <h1 className="num text-[2rem] font-bold leading-none tracking-tight">Entrar</h1>
-            <p className="mt-2 text-tinta-400">Use o e-mail e a senha cadastrados pelo administrador.</p>
+            <h1 className="num text-[2rem] font-bold leading-none tracking-tight">{TITULOS[modo][0]}</h1>
+            <p className="mt-2 text-tinta-400">{TITULOS[modo][1]}</p>
           </div>
           <Campo rotulo="E-mail"><input className="campo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Campo>
-          <Campo rotulo="Senha"><input className="campo" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></Campo>
+          {modo !== 'esqueci' && <Campo rotulo={modo === 'primeiro' ? 'Crie uma senha' : 'Senha'} ajuda={modo === 'primeiro' ? 'Pelo menos 8 caracteres' : undefined}><input className="campo" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required autoComplete={modo === 'primeiro' ? 'new-password' : 'current-password'} /></Campo>}
+          {modo === 'primeiro' && <Campo rotulo="Repita a senha"><input className="campo" type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} required autoComplete="new-password" /></Campo>}
           {erro && <p className="rounded-xl bg-rubro-50 px-3 py-2 text-sm text-rubro-600">{erro}</p>}
-          <Botao type="submit" className="w-full py-3" carregando={carregando}>Entrar</Botao>
+          {aviso && <p className="rounded-xl bg-caixa-50 px-3 py-2 text-sm text-caixa-700 dark:bg-caixa-900/30 dark:text-caixa-300">{aviso}</p>}
+          <Botao type="submit" className="w-full py-3" carregando={carregando}>{TITULOS[modo][2]}</Botao>
+          <div className="flex justify-between text-sm">
+            {modo === 'entrar' ? <>
+              <button type="button" className="font-medium text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => trocar('primeiro')}>Primeiro acesso</button>
+              <button type="button" className="font-medium text-tinta-400 hover:underline" onClick={() => trocar('esqueci')}>Esqueci a senha</button>
+            </> : <button type="button" className="font-medium text-caixa-600 hover:underline dark:text-caixa-300" onClick={() => trocar('entrar')}>Voltar para entrar</button>}
+          </div>
         </form>
       </div>
     </div>

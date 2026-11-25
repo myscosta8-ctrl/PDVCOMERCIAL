@@ -278,7 +278,31 @@ function relatorioDemo({ p_inicio, p_fim }) {
   return out
 }
 
+const C = (id, razao, fantasia, seg, uf, plano, mens, extra = {}) => ({ id, razao_social: razao, nome_fantasia: fantasia, cnpj: null, uf, segmento: seg,
+  regime_tributario: 'simples', plano, mensalidade: mens, dia_vencimento: 10, cliente_desde: '2026-03-01', ativa: true, bloqueada_em: null, motivo_bloqueio: null,
+  contato: { nome: 'Responsável', telefone: '91988887777', email: 'contato@exemplo.com.br' }, obs_revenda: null, nfce_ambiente: 1, certificado_validade: '2027-05-10',
+  usuarios: 3, ultima_venda: h(11, 20), vendas_30d: 1240, faturamento_30d: 48250.4, nfce_30d: 1198, vencidas: 0, valor_vencido: 0, proximo_vencimento: '2026-12-10',
+  convite_pendente: null, ...extra })
+const REVENDA = {
+  clientes: [
+    C('e1', 'Farma Família Ltda', 'Farma Família', 'farmacia', 'PA', 'completo', 0, { cnpj: '12345678000195', usuarios: 4 }),
+    C('e2', 'Mercadinho Bom Preço Ltda', 'Bom Preço', 'mercado', 'PA', 'fiscal', 189.9, { cnpj: '22333444000155', vendas_30d: 2310, faturamento_30d: 61930.2, nfce_30d: 2290 }),
+    C('e3', 'Moda Rio Ltda', 'Moda Rio', 'vestuario', 'PA', 'completo', 149.9, { vencidas: 1, valor_vencido: 149.9, proximo_vencimento: '2026-11-10', vendas_30d: 312, faturamento_30d: 18440, nfce_30d: 296 }),
+    C('e4', 'Lanchonete Ponto Certo ME', 'Ponto Certo', 'restaurante', 'PA', 'essencial', 89.9, { bloqueada_em: '2026-11-18T13:00:00Z', motivo_bloqueio: 'Duas mensalidades em atraso', vencidas: 2, valor_vencido: 179.8, proximo_vencimento: '2026-10-10', ultima_venda: '2026-11-17T21:40:00Z', vendas_30d: 410, faturamento_30d: 9820, nfce_30d: 402 }),
+    C('e5', 'Casa do Construtor Breves Ltda', 'Casa do Construtor', 'materiais', 'PA', 'fiscal', 219.9, { convite_pendente: 'compras@casadoconstrutor.com.br', usuarios: 0, ultima_venda: null, vendas_30d: 0, faturamento_30d: 0, nfce_30d: 0, cliente_desde: '2026-11-20', nfce_ambiente: 2, certificado_validade: null }),
+  ],
+  totais: { ativos: 4, suspensos: 1, encerrados: 0, receita_mensal: 649.6, inadimplentes: 2, valor_vencido: 329.7, recebido_mes: 339.8, sem_uso_7d: 1 },
+}
+const MENSALIDADES_DEMO = [
+  { id: 'm3', competencia: '2026-11-01', vencimento: '2026-11-10', valor: 149.9, status: 'aberta' },
+  { id: 'm2', competencia: '2026-10-01', vencimento: '2026-10-10', valor: 149.9, status: 'paga', pago_em: '2026-10-09', forma: 'PIX' },
+  { id: 'm1', competencia: '2026-09-01', vencimento: '2026-09-10', valor: 149.9, status: 'paga', pago_em: '2026-09-12', forma: 'Boleto' },
+]
+
 const RPC = {
+  revenda_painel: REVENDA,
+  revenda_mensalidades: MENSALIDADES_DEMO,
+  situacao_acesso: { revendedor: true, mensalidades_vencidas: 0, valor_vencido: 0 },
   gerar_despesas_fixas: 0,
   numeros_nfce_sem_nota: { ambiente: 2, serie: 1, ultimo: 313, faixas: [
     { inicio: 305, fim: 306, qtd: 2, situacao: 'sem_nota' },
